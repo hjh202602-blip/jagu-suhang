@@ -7,7 +7,8 @@
 # ---------- 화면 ----------
 W, H = 1200, 720        # 창 크기
 FPS = 60                # 초당 프레임
-FONT_NAME = "malgungothic"  # 한글 폰트 (윈도우 맑은 고딕)
+# 한글 폰트: 앞에서부터 컴퓨터에 있는 것을 씀 (윈도우 맑은 고딕 → 맥 애플고딕 → 나눔고딕)
+FONT_NAME = "malgungothic,applesdgothicneo,applegothic,nanumgothic,notosanscjkkr"
 
 # ---------- 색 (흰 바탕 + 검은 선, 기획서 아트 방향) ----------
 WHITE = (255, 255, 255)
@@ -31,3 +32,4 @@ HAND_SIZE = 6            # 턴마다 뽑는 카드 수
 QUEUE_SIZE = 5           # 행동 큐 최대 칸 수
 MAGAZINE_SIZE = 5        # 마법 탄창 최대 칸 수
 STEP_DELAY = 350         # 실행 중 행동 하나 사이 간격(ms) - 플레이어가 눈으로 따라갈 수 있게
+OP_SHOW_TIME = 1200      # pop(), enqueue() 같은 자료구조 연산 글자가 떠 있는 시간(ms)

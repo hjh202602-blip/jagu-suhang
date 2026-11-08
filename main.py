@@ -14,7 +14,7 @@ import pygame
 from settings import W, H, FPS, WHITE
 from stages import STAGES
 from todo import NotDone
-from scenes import TitleScene, SelectScene, PlayScene, PauseScene, ResultScene, TodoScene
+from scenes import TitleScene, HowToScene, SelectScene, PlayScene, PauseScene, ResultScene, TodoScene
 
 
 class Game:
@@ -62,6 +62,8 @@ class Game:
         """화면 이름을 받아 실제 화면 객체로 바꿈."""
         if name == "title":
             self.scene = TitleScene()
+        elif name == "howto":
+            self.scene = HowToScene()
         elif name == "select":
             self.scene = SelectScene(self)
         elif name == "play":            # 새 스테이지 시작

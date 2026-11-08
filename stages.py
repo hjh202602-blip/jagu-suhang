@@ -52,3 +52,22 @@ STAGES = [
         "....i.....",
     ],
 ]
+
+# 별점 기준 (기획서 4-4: 적은 턴으로 깰수록 별 1~3개)
+# (별 3개 최대 턴, 별 2개 최대 턴). 그보다 많으면 별 1개
+# TODO(기획 홍정현): 7주차 테스트 플레이 후 숫자 조정
+STAR_TURNS = [
+    (4, 7),     # 1. 훈련장
+    (7, 12),    # 2. 추격
+    (10, 16),   # 3. 미궁
+]
+
+
+def stars(stage_no, turns):
+    """stage_no(1부터) 를 turns 턴에 깼을 때 받는 별 개수 (1~3)."""
+    three, two = STAR_TURNS[stage_no - 1]
+    if turns <= three:
+        return 3
+    if turns <= two:
+        return 2
+    return 1

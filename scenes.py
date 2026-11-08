@@ -2,7 +2,7 @@
 화면(Scene) 모음 (담당: 표현 주서연 / 화면 전환 연결: 개발 김보민)
 
 화면 흐름 (기획서 4-4)
-  타이틀 → 스테이지 선택 → 1층 → 2층 → 3층 → 결과 → 다시 하기
+  타이틀 → 조작 설명 → 스테이지 선택 → 1층 → 2층 → 3층 → 결과 → 다시 하기
   플레이 중 ESC → 일시정지
 
 모든 화면은 같은 세 함수를 가짐
@@ -15,11 +15,11 @@
 import pygame
 
 import assets
-from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK,
-                      MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY)
-from ui import box, label, Button
+from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK, WHITE,
+                      MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY, OP_SHOW_TIME)
+from ui import box, label, font, Button
 from battle import Battle
-from stages import STAGE_NAMES
+from stages import STAGE_NAMES, stars
 
 
 class Scene:
@@ -42,12 +42,46 @@ class TitleScene(Scene):
 
     def handle(self, event):
         if self.start.clicked(event):
-            return "select"
+            return "howto"
 
     def draw(self, surf):
         label(surf, W // 2, 220, "격자 사냥", 64)
         label(surf, W // 2, 300, "마법 학교 견습생, 탄창 하나로 미궁을 탈출하라", 20)
         self.start.draw(surf)
+
+
+# ======================================================================
+class HowToScene(Scene):
+    """조작 설명 (기획서 4-4: 타이틀 → 조작 설명 → 1번 방)."""
+
+    LINES = [
+        "1. 손에 뽑은 카드 6장 중 최대 5장을 눌러 오른쪽 행동 큐에 넣는다  (enqueue)",
+        "2. 실행 버튼(Enter)을 누르면 큐 맨 앞부터 하나씩 실행된다  (dequeue, 먼저 넣은 것이 먼저)",
+        "3. 실행이 끝나면 추적자가 머리 위 숫자만큼 최단 경로(BFS)로 다가온다",
+        "4. 탄을 밟으면 탄창 맨 위에 쌓이고, 발사하면 맨 위 탄이 나간다  (push / pop, 5칸)",
+        "5. 재장전 카드: 탄을 다 꺼내 약한 순으로 정렬해 다시 넣는다 → 가장 센 탄이 맨 위",
+        "6. 적에게 부딪히면 체력 -1, 다음 행동이 버려지고 맨 뒤에 '기절'이 들어온다",
+        "7. 뒤집기 타일을 밟으면 남은 행동 순서가 거꾸로 바뀐다",
+        "8. 적을 모두 쓰러뜨리고 출구에 서면 클리어. 적은 턴으로 깰수록 별이 많다",
+    ]
+    TAN = "탄:  화염탄 피해 2  /  빙결탄 피해 1 + 적이 멈춤  /  폭발탄 피해 1 + 앞의 벽을 부숨"
+    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지"
+
+    def __init__(self):
+        self.next = Button((W // 2 - 100, 590, 200, 60), "시작하기", 24)
+
+    def handle(self, event):
+        if self.next.clicked(event) or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+            return "select"
+
+    def draw(self, surf):
+        label(surf, W // 2, 80, "조작 설명", 40)
+        for i, line in enumerate(self.LINES):
+            img = font(18).render(line, True, BLACK)
+            surf.blit(img, (170, 140 + i * 40))
+        label(surf, W // 2, 490, self.TAN, 17)
+        label(surf, W // 2, 530, self.KEYS, 17)
+        self.next.draw(surf)
 
 
 # ======================================================================
@@ -82,6 +116,7 @@ class PlayScene(Scene):
         self.game = game
         self.battle = Battle(game.stage)
         self.timer = 0  # 실행 중 다음 행동까지 남은 시간 계산용
+        self.floats = []  # 화면에 떠 있는 자료구조 연산 글자 [where, 글자, 지난 시간(ms)]
 
         # 클릭 영역
         self.run_button = Button((W - 190, 545, 140, 55), "실행", 20)
@@ -96,6 +131,8 @@ class PlayScene(Scene):
                 return "pause"
             if event.key == pygame.K_r:                 # 이 스테이지 처음부터
                 self.battle = Battle(self.game.stage)
+                self.floats = []
+                return None
             if event.key == pygame.K_RETURN:
                 b.start_run()
         if self.run_button.clicked(event):
@@ -123,6 +160,14 @@ class PlayScene(Scene):
             if self.timer >= STEP_DELAY:
                 self.timer = 0
                 b.step()
+
+        # 자료구조 연산 글자: 새로 생긴 것은 추가, 오래된 것은 지움
+        for where, text in b.take_ops():
+            self.floats.append([where, text, 0])
+        for f in self.floats:
+            f[2] += dt
+        self.floats = [f for f in self.floats if f[2] < OP_SHOW_TIME]
+
         # 스테이지가 끝났으면 다음 화면으로
         if b.state == "clear":
             return self.game.stage_cleared(b.turn)
@@ -142,6 +187,30 @@ class PlayScene(Scene):
         self.draw_hud(surf)
         self.draw_queue(surf)
         self.draw_hand(surf)
+        self.draw_ops(surf)
+
+    # 연산 글자를 띄울 위치 (영역별 기준점)
+    OP_POS = {
+        "deck": (130, 226),          # 카드 더미 아래
+        "magazine": (130, 414),      # 마법 탄창 위
+        "queue": (W - 120, 505),     # 행동 큐 아래
+        "grid": (GRID_X + N * CELL // 2, 19),  # 격자 위
+    }
+
+    def draw_ops(self, surf):
+        """pop(), enqueue() 같은 연산 이름을 잠깐 띄웠다가 흐려지며 사라지게 (기획서 독창 요소 ③)."""
+        shown = {}  # 영역별로 이미 그린 줄 수
+        for where, text, age in reversed(self.floats):    # 최신 것부터
+            k = shown.get(where, 0)
+            if k >= 2:                                    # 영역마다 최근 2줄만
+                continue
+            shown[where] = k + 1
+            x, y = self.OP_POS[where]
+            img = font(13).render(text, True, BLACK)
+            img.set_alpha(int(255 * (1 - age / OP_SHOW_TIME)))
+            rect = img.get_rect(center=(x, y - k * 16 - age // 160))  # 위로 살짝 떠오름
+            pygame.draw.rect(surf, WHITE, rect.inflate(4, 0))
+            surf.blit(img, rect)
 
     def draw_left(self, surf):
         """왼쪽: 카드 더미, 버린 카드, 마법 탄창."""
@@ -282,11 +351,17 @@ class ResultScene(Scene):
     def draw(self, surf):
         g = self.game
         label(surf, W // 2, 160, "탈출 성공!" if g.cleared else "실패...", 48)
+        total_stars = 0
         for i, turns in enumerate(g.records):
-            label(surf, W // 2, 250 + i * 40, f"{STAGE_NAMES[g.first_stage - 1 + i]} : {turns}턴", 22)
+            stage_no = g.first_stage + i
+            n = stars(stage_no, turns)
+            total_stars += n
+            label(surf, W // 2, 250 + i * 40,
+                  f"{STAGE_NAMES[stage_no - 1]} : {turns}턴   {'★' * n}{'☆' * (3 - n)}", 22)
         y = 250 + len(g.records) * 40
         if not g.cleared:
             label(surf, W // 2, y, f"{STAGE_NAMES[g.stage - 1]} : {g.failed_turns}턴째에 쓰러짐", 22)
         elif g.records:
-            label(surf, W // 2, y + 20, f"전체 {sum(g.records)}턴", 24)
+            label(surf, W // 2, y + 20,
+                  f"전체 {sum(g.records)}턴   별 {total_stars} / {len(g.records) * 3}", 24)
         self.retry.draw(surf)

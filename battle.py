@@ -41,13 +41,29 @@ class Battle:
         self.phase = "plan"                 # plan(계획 중) / run(실행 중)
         self.state = "playing"              # playing / clear / fail
         self.message = ""                   # 화면에 보여줄 최근 사건 한 줄
+        self.ops = []                       # 아직 화면에 안 넘긴 자료구조 연산 기록 (where, 글자)
         self.start_turn()
+
+    # ================= 자료구조 연산 기록 =================
+    def op(self, where, text):
+        """
+        자료구조 연산이 일어났다고 기록 (기획서 독창 요소 ③).
+        where: 'queue'(행동 큐) / 'magazine'(탄창) / 'deck'(카드 더미) / 'grid'(BFS)
+        화면(scenes.py)이 take_ops() 로 가져가서 잠깐 띄웠다가 지움.
+        """
+        self.ops.append((where, text))
+
+    def take_ops(self):
+        """쌓인 연산 기록을 넘겨주고 비움."""
+        ops, self.ops = self.ops, []
+        return ops
 
     # ================= 턴 관리 =================
     def start_turn(self):
         """새 턴: 카드 뽑기, 적 이동 칸 수 정하기."""
         self.turn += 1
         self.hand = self.deck.draw(HAND_SIZE)
+        self.op("deck", f"pop() x{len(self.hand)}")
         for e in self.board.enemies:
             e.roll_steps()
         self.phase = "plan"
@@ -63,13 +79,18 @@ class Battle:
         """손패의 카드를 행동 큐 맨 뒤에 넣기 (enqueue)."""
         if self.phase != "plan" or self.queue.is_full():
             return
-        self.queue.enqueue(self.hand.pop(hand_index))
+        card = self.hand[hand_index]
+        if self.queue.enqueue(card):
+            self.hand.pop(hand_index)
+            self.op("queue", f"enqueue({card})")
 
     def unqueue_card(self, queue_index):
         """계획 중에는 큐에 넣은 카드를 손패로 되돌릴 수 있음."""
         if self.phase != "plan":
             return
-        self.hand.append(self.queue.remove_at(queue_index))
+        card = self.queue.remove_at(queue_index)
+        if card is not None:
+            self.hand.append(card)
 
     def start_run(self):
         """실행 버튼: 이 순간부터는 큐를 바꿀 수 없음."""
@@ -83,6 +104,7 @@ class Battle:
             return
         if not self.queue.is_empty():
             card = self.queue.dequeue()
+            self.op("queue", f"dequeue() → {card}")
             self.do_action(card)
             if card != STUN:                # 기절은 진짜 카드가 아니라 버리지 않음
                 self.deck.discard_cards([card])
@@ -112,6 +134,7 @@ class Battle:
         elif card == "재장전":
             if self.magazine.reload():
                 self.message = "재장전: 센 탄이 맨 위로"
+                self.op("magazine", f"pop() x{len(self.magazine)} → 선택 정렬 → push()")
             else:
                 self.message = "[미구현] 선택 정렬 (표현 주서연) - 탄창 그대로"
         elif card == STUN:
@@ -131,9 +154,12 @@ class Battle:
             self.message = "적과 부딪혔다! 체력 -1, 기절"
             # 피격: 다음 행동(큐 맨 앞)을 버리고 맨 뒤에 '기절' 넣기
             lost = self.queue.dequeue()
-            if lost is not None and lost != STUN:
-                self.deck.discard_cards([lost])
+            if lost is not None:
+                self.op("queue", f"dequeue() → {lost} 버림")
+                if lost != STUN:
+                    self.deck.discard_cards([lost])
             self.queue.enqueue(STUN)
+            self.op("queue", f"enqueue({STUN})")
             return
 
         p.pos = nxt
@@ -145,14 +171,17 @@ class Battle:
             if self.magazine.push(bullet):
                 del board.items[nxt]
                 self.message = f"{bullet} 장전"
+                self.op("magazine", f"push({bullet})")
             else:
                 self.message = "탄창이 꽉 차서 못 주웠다"
+                self.op("magazine", "push() 실패: 오버플로")
 
         # 뒤집기 타일: 남은 행동 순서를 거꾸로 (algorithms.reverse_queue)
         if board.tile(nxt) == FLIP:
             try:
                 algorithms.reverse_queue(self.queue)
                 self.message = "뒤집기 타일! 남은 행동이 거꾸로"
+                self.op("queue", "dequeue()→push() … pop()→enqueue()")
             except NotDone:
                 self.message = "[미구현] 큐 뒤집기 (기획 홍정현) - 순서 그대로"
 
@@ -167,7 +196,9 @@ class Battle:
         bullet = self.magazine.pop()
         if bullet is None:
             self.message = "탄창이 비어 있다"
+            self.op("magazine", "pop() → 비어 있음")
             return
+        self.op("magazine", f"pop() → {bullet}")
 
         dx, dy = DIRS[p.facing]
         pos = p.pos
@@ -209,6 +240,8 @@ class Battle:
             except NotDone:
                 self.message = "[미구현] BFS (개발 김보민) - 적이 움직이지 않음"
                 return
+            if path:
+                self.op("grid", f"BFS: 최단 {len(path)}칸")
             for nxt in path[:e.steps]:
                 if nxt == p.pos:        # 플레이어 칸에 닿음 → 공격하고 멈춤
                     p.hp -= 1

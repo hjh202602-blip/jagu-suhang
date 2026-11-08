@@ -1,7 +1,7 @@
 """
 핵심 알고리즘 모음
 
-★ 팀원이 채울 부분 ★  (각 함수 안의 todo(...) 를 지우고 직접 구현)
+담당
   - bfs_path       : 개발 김보민   (적 추격)
   - selection_sort : 표현 주서연   (재장전)
   - reverse_queue  : 기획 홍정현   (뒤집기 타일)
@@ -11,10 +11,8 @@
   - 큐/스택은 structures.py 의 Queue, Stack 을 사용
   - 다 채웠으면  python check.py  로 확인
 
-아직 안 채워도 게임은 실행됨 (적이 안 움직이거나, 재장전/뒤집기가 효과 없이 넘어감).
 """
 from structures import Queue, Stack  # 구현할 때 사용 (BFS → Queue, 큐 뒤집기 → Stack)
-from todo import todo
 
 
 def bfs_path(start, goal, can_pass):
@@ -36,8 +34,35 @@ def bfs_path(start, goal, can_pass):
         2) 큐에서 하나 꺼내 이웃 4칸 중 can_pass 이고 prev 에 없는 칸을 넣기
         3) goal 에 도착하면 prev 를 거꾸로 따라가 경로를 만들고 뒤집기
     """
-    # TODO(개발 김보민): BFS 구현
-    todo("algorithms.bfs_path", "개발 김보민")
+    if start == goal:
+        return []
+
+    queue = Queue()
+    queue.enqueue(start)
+    prev = {start: None}    # 칸 → 그 칸에 오기 직전 칸 (방문 표시도 겸함)
+
+    while not queue.is_empty():
+        cur = queue.dequeue()
+        if cur == goal:
+            break
+        # 이웃 4칸: 위, 오른쪽, 아래, 왼쪽 순서 (같은 거리면 이 순서가 먼저 → 적 움직임이 항상 같음)
+        for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+            nxt = (cur[0] + dx, cur[1] + dy)
+            if nxt not in prev and can_pass(nxt):
+                prev[nxt] = cur
+                queue.enqueue(nxt)
+
+    if goal not in prev:    # 큐가 빌 때까지 goal 에 못 감 → 길 없음
+        return []
+
+    # goal 에서 prev 를 따라 start 직전까지 거꾸로 올라간 뒤 뒤집기
+    path = []
+    cur = goal
+    while cur != start:
+        path.append(cur)
+        cur = prev[cur]
+    path.reverse()
+    return path
 
 
 def selection_sort(items, key):
