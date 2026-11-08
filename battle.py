@@ -24,6 +24,7 @@ from stages import STAGES
 # 탄 종류별 피해량 - TODO(기획 홍정현): 밸런스 조정
 DAMAGE = {"화염탄": 2, "빙결탄": 1, "폭발탄": 1}
 FREEZE_TURNS = 2  # 빙결탄에 맞은 적이 멈추는 턴 수 (맞은 턴 포함)
+STUN = "기절"      # 피격 시 큐 맨 뒤에 들어가는 행동 (아무것도 안 함, 카드 더미에 안 들어감)
 
 
 class Battle:
@@ -83,7 +84,8 @@ class Battle:
         if not self.queue.is_empty():
             card = self.queue.dequeue()
             self.do_action(card)
-            self.deck.discard_cards([card])
+            if card != STUN:                # 기절은 진짜 카드가 아니라 버리지 않음
+                self.deck.discard_cards([card])
             self.check_state()
         else:
             self.enemy_turn()
@@ -112,6 +114,8 @@ class Battle:
                 self.message = "재장전: 센 탄이 맨 위로"
             else:
                 self.message = "[미구현] 선택 정렬 (표현 주서연) - 탄창 그대로"
+        elif card == STUN:
+            self.message = "기절해서 한 박자 쉬었다"
 
     def move_player(self, d):
         """플레이어를 d 방향으로 한 칸. 벽이면 멈추고, 적이면 부딪혀서 체력 -1."""
@@ -124,8 +128,12 @@ class Battle:
             return
         if board.enemy_at(nxt):
             p.hp -= 1
-            self.message = "적과 부딪혔다! 체력 -1"
-            # TODO(기획 홍정현): 피격 시 큐 맨 앞 행동 버리고 맨 뒤에 '기절' 넣기
+            self.message = "적과 부딪혔다! 체력 -1, 기절"
+            # 피격: 다음 행동(큐 맨 앞)을 버리고 맨 뒤에 '기절' 넣기
+            lost = self.queue.dequeue()
+            if lost is not None and lost != STUN:
+                self.deck.discard_cards([lost])
+            self.queue.enqueue(STUN)
             return
 
         p.pos = nxt

@@ -56,8 +56,19 @@ def selection_sort(items, key):
 
     힌트: i 번째 자리에 i 번째 이후에서 가장 작은 값을 찾아와 바꾸기를 반복
     """
-    # TODO(표현 주서연): 선택 정렬 구현 (sort(), sorted() 금지)
-    todo("algorithms.selection_sort", "표현 주서연")
+    steps = []
+    n = len(items)
+    for i in range(n - 1):
+        # i 번째 이후에서 가장 작은 값의 위치 찾기
+        min_idx = i
+        for j in range(i + 1, n):
+            if key(items[j]) < key(items[min_idx]):
+                min_idx = j
+        # 찾은 값을 i 번째 자리로. 자리를 바꿨을 때만 단계 기록
+        if min_idx != i:
+            items[i], items[min_idx] = items[min_idx], items[i]
+            steps.append(list(items))
+    return steps
 
 
 def reverse_queue(queue):
@@ -74,5 +85,10 @@ def reverse_queue(queue):
     힌트: 큐에서 전부 dequeue 해서 Stack 에 push → Stack 에서 전부 pop 해서 다시 enqueue
           (FIFO 가 LIFO 로 바뀌는 순간을 게임에서 보여주는 기믹)
     """
-    # TODO(기획 홍정현): Stack 을 이용해 큐 뒤집기
-    todo("algorithms.reverse_queue", "기획 홍정현")
+    stack = Stack()
+    # 1) 큐 앞에서부터 꺼내 스택에 쌓기 → 마지막 행동이 스택 맨 위
+    while not queue.is_empty():
+        stack.push(queue.dequeue())
+    # 2) 스택 맨 위부터 꺼내 큐에 다시 넣기 → 순서가 거꾸로
+    while not stack.is_empty():
+        queue.enqueue(stack.pop())
