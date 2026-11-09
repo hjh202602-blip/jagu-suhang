@@ -34,6 +34,7 @@ class Enemy:
         self.hp = 2 if kind == "chaser" else 1
         self.frozen = 0     # 빙결탄에 맞으면 남은 정지 턴 수
         self.steps = 0      # 이번 턴에 다가올 칸 수 (머리 위 숫자)
+        self.trail = []     # 지난 적 차례에 지나간 칸들 (이동 애니메이션용)
 
     def roll_steps(self):
         """턴 시작마다 이동 칸 수를 1~3 중 랜덤으로 정함. 허수아비나 얼어 있는 적은 0."""
