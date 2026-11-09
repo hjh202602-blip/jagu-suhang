@@ -18,7 +18,9 @@ class Magazine(Stack):
 
     def __init__(self):
         super().__init__(MAGAZINE_SIZE)
-        self.last_sort_steps = []   # 마지막 재장전의 정렬 단계 (TODO(표현 주서연): 애니메이션에 사용)
+        self.last_before = []       # 마지막 재장전에서 정렬하기 전 순서 (바닥 → 맨 위)
+        self.last_sort_steps = []   # 마지막 재장전의 정렬 단계 (화면의 정렬 애니메이션에 사용)
+        self.reload_count = 0       # 재장전 횟수 (화면이 새 재장전을 알아채는 용도)
 
     def reload(self):
         """
@@ -31,6 +33,7 @@ class Magazine(Stack):
             bullets.append(self.pop())          # 맨 위부터 꺼냄
         bullets.reverse()                       # 바닥 → 맨 위 순서로 되돌려 둠
 
+        self.last_before = list(bullets)
         done = True
         try:
             self.last_sort_steps = algorithms.selection_sort(bullets, key=lambda b: POWER[b])
@@ -39,4 +42,6 @@ class Magazine(Stack):
 
         for b in bullets:
             self.push(b)
+        if done:
+            self.reload_count += 1
         return done

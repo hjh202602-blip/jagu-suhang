@@ -16,7 +16,8 @@ import pygame
 
 import assets
 from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK, WHITE,
-                      MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY, OP_SHOW_TIME)
+                      MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY, OP_SHOW_TIME,
+                      MOVE_SPEED, SORT_DELAY)
 from ui import box, label, font, Button
 from battle import Battle
 from stages import STAGE_NAMES, stars
@@ -117,6 +118,7 @@ class PlayScene(Scene):
         self.battle = Battle(game.stage)
         self.timer = 0  # 실행 중 다음 행동까지 남은 시간 계산용
         self.floats = []  # 화면에 떠 있는 자료구조 연산 글자 [where, 글자, 지난 시간(ms)]
+        self.reset_anim()
 
         # 클릭 영역
         self.run_button = Button((W - 190, 545, 140, 55), "실행", 20)
@@ -132,6 +134,7 @@ class PlayScene(Scene):
             if event.key == pygame.K_r:                 # 이 스테이지 처음부터
                 self.battle = Battle(self.game.stage)
                 self.floats = []
+                self.reset_anim()
                 return None
             if event.key == pygame.K_RETURN:
                 b.start_run()
@@ -151,11 +154,61 @@ class PlayScene(Scene):
                     return None
         return None
 
+    # ---------- 애니메이션 ----------
+    def reset_anim(self):
+        """애니메이션 상태 초기화 (새 판, R 다시 시작)."""
+        self.moving = {}       # id(유닛) → {"at": 지금 그려지는 (c, r) 실수 좌표, "goal": 목표 칸, "path": 남은 칸들}
+        self.sort_frames = []  # 재장전 정렬 과정: 화면에 차례로 보여줄 탄창 상태들
+        self.sort_timer = 0
+        self.seen_reload = self.battle.magazine.reload_count
+
+    def track(self, unit, trail):
+        """유닛의 칸이 바뀌었으면 지나간 칸(trail)을 따라 미끄러지도록 등록."""
+        m = self.moving.get(id(unit))
+        if m is None:
+            self.moving[id(unit)] = {"at": unit.pos, "goal": unit.pos, "path": []}
+            return
+        if m["goal"] != unit.pos:
+            m["path"] += trail if trail and trail[-1] == unit.pos else [unit.pos]
+            m["goal"] = unit.pos
+
+    def slide(self, dt):
+        """등록된 경로를 따라 한 칸씩 이동 (MOVE_SPEED 칸/ms)."""
+        for m in self.moving.values():
+            budget = MOVE_SPEED * dt
+            while m["path"] and budget > 0:
+                (x, y), (tx, ty) = m["at"], m["path"][0]
+                dist = abs(tx - x) + abs(ty - y)
+                if dist <= budget:
+                    m["at"] = m["path"].pop(0)
+                    budget -= dist
+                else:
+                    m["at"] = (x + (tx - x) * budget / dist, y + (ty - y) * budget / dist)
+                    budget = 0
+
+    def shown_pos(self, unit):
+        """화면에 그릴 위치 (움직이는 중이면 칸 사이)."""
+        m = self.moving.get(id(unit))
+        return m["at"] if m else unit.pos
+
     # ---------- 시간 ----------
     def update(self, dt):
         b = self.battle
-        # 실행 중이면 STEP_DELAY 마다 행동 하나씩 처리
-        if b.phase == "run":
+
+        # 재장전 정렬 애니메이션: 새 재장전이 일어났으면 정렬 단계를 차례로 보여 줌
+        if b.magazine.reload_count != self.seen_reload:
+            self.seen_reload = b.magazine.reload_count
+            self.sort_frames = [b.magazine.last_before] + b.magazine.last_sort_steps
+            self.sort_total = len(self.sort_frames)
+            self.sort_timer = 0
+        if self.sort_frames:
+            self.sort_timer += dt
+            if self.sort_timer >= SORT_DELAY:
+                self.sort_timer = 0
+                self.sort_frames.pop(0)
+
+        # 실행 중이면 STEP_DELAY 마다 행동 하나씩 처리 (정렬 애니메이션 중에는 잠깐 멈춤)
+        if b.phase == "run" and not self.sort_frames:
             self.timer += dt
             if self.timer >= STEP_DELAY:
                 self.timer = 0
@@ -168,6 +221,16 @@ class PlayScene(Scene):
             f[2] += dt
         self.floats = [f for f in self.floats if f[2] < OP_SHOW_TIME]
 
+        # 이동 애니메이션
+        self.track(b.board.player, None)
+        for e in b.board.enemies:
+            self.track(e, e.trail)
+        self.slide(dt)
+
+        # 효과음
+        for name in b.take_sounds():
+            assets.play(name)
+
         # 스테이지가 끝났으면 다음 화면으로
         if b.state == "clear":
             return self.game.stage_cleared(b.turn)
@@ -178,7 +241,7 @@ class PlayScene(Scene):
     # ---------- 그리기 ----------
     def cell_rect(self, pos):
         c, r = pos
-        return pygame.Rect(GRID_X + c * CELL, GRID_Y + r * CELL, CELL, CELL)
+        return pygame.Rect(round(GRID_X + c * CELL), round(GRID_Y + r * CELL), CELL, CELL)
 
     def draw(self, surf):
         box(surf, (10, 10, W - 20, H - 20))
@@ -225,7 +288,12 @@ class PlayScene(Scene):
 
         # 마법 탄창: 아래 칸이 바닥(bottom), 채워진 가장 위 칸이 top
         bullets = self.battle.magazine.to_list()
-        label(surf, 130, 440, "마법 탄창", 17)
+        title = "마법 탄창"
+        if self.sort_frames:                       # 재장전 중: 정렬 단계를 하나씩 보여 줌
+            bullets = self.sort_frames[0]
+            step = self.sort_total - len(self.sort_frames)
+            title = f"선택 정렬 {step}/{self.sort_total - 1}" if self.sort_total > 1 else "이미 정렬됨"
+        label(surf, 130, 440, title, 17)
         for i in range(MAGAZINE_SIZE):
             slot_y = 460 + (MAGAZINE_SIZE - 1 - i) * 42   # i=0 이 맨 아래 칸
             box(surf, (80, slot_y, 100, 38), 2)
@@ -233,7 +301,6 @@ class PlayScene(Scene):
                 label(surf, 130, slot_y + 19, bullets[i], 15)
             if i == len(bullets) - 1:
                 label(surf, 205, slot_y + 19, "◀ top", 13)
-        # TODO(표현 주서연): 재장전 시 magazine.last_sort_steps 를 한 단계씩 보여주기
 
     def draw_grid(self, surf):
         """가운데: 10x10 격자. 칸·탄·적·플레이어 그림은 assets.py 가 그림."""
@@ -251,7 +318,7 @@ class PlayScene(Scene):
 
         # 적 + 머리 위 정보(이번 턴 이동 칸 수, 얼어 있으면 '얼음')
         for e in board.enemies:
-            rect = self.cell_rect(e.pos)
+            rect = self.cell_rect(self.shown_pos(e))
             assets.draw_enemy(surf, rect, e.kind)
             if e.frozen > 0:
                 label(surf, rect.centerx, rect.centery - 14, "얼음", 11)
@@ -260,8 +327,7 @@ class PlayScene(Scene):
 
         # 플레이어
         p = board.player
-        assets.draw_player(surf, self.cell_rect(p.pos), p.facing)
-        # TODO(표현 주서연): 칸 사이를 미끄러지듯 이동하는 애니메이션
+        assets.draw_player(surf, self.cell_rect(self.shown_pos(p)), p.facing)
 
     def draw_hud(self, surf):
         """격자 바로 아래: 스테이지, 체력, 턴, 최근 사건."""

@@ -12,8 +12,10 @@
 핵심 자료구조·알고리즘(structures.py, algorithms.py)이 아직 비어 있어도
 BFS/재장전/뒤집기는 "미구현" 안내만 하고 넘어가도록 해 둠 (NotDone 처리).
 """
+import random
+
 import algorithms
-from settings import DIRS, HAND_SIZE, QUEUE_SIZE
+from settings import DIRS, HAND_SIZE, QUEUE_SIZE, N
 from structures import Queue
 from todo import NotDone
 from board import Board, EXIT, FLIP, FLOOR
@@ -42,6 +44,7 @@ class Battle:
         self.state = "playing"              # playing / clear / fail
         self.message = ""                   # 화면에 보여줄 최근 사건 한 줄
         self.ops = []                       # 아직 화면에 안 넘긴 자료구조 연산 기록 (where, 글자)
+        self.sounds = []                    # 아직 화면에 안 넘긴 효과음 이름
         self.start_turn()
 
     # ================= 자료구조 연산 기록 =================
@@ -58,6 +61,14 @@ class Battle:
         ops, self.ops = self.ops, []
         return ops
 
+    def sound(self, name):
+        """효과음을 내야 한다고 기록. 재생은 화면(scenes.py)이 assets.play() 로."""
+        self.sounds.append(name)
+
+    def take_sounds(self):
+        sounds, self.sounds = self.sounds, []
+        return sounds
+
     # ================= 턴 관리 =================
     def start_turn(self):
         """새 턴: 카드 뽑기, 적 이동 칸 수 정하기."""
@@ -66,7 +77,32 @@ class Battle:
         self.op("deck", f"pop() x{len(self.hand)}")
         for e in self.board.enemies:
             e.roll_steps()
+        self.refill_ammo()
         self.phase = "plan"
+
+    def refill_ammo(self):
+        """
+        탄이 하나도 없는데(탄창·바닥 모두) 적이 남아 있으면 더 이상 깰 수 없음.
+        → 플레이어가 갈 수 있는 가까운 빈 칸에 화염탄을 하나 만들어 줌.
+        """
+        board = self.board
+        if not board.enemies or not self.magazine.is_empty() or board.items:
+            return
+        blocked = {e.pos for e in board.enemies}
+        near, far = [], []
+        for r in range(N):
+            for c in range(N):
+                pos = (c, r)
+                if board.tile(pos) != FLOOR or pos in blocked or pos == board.player.pos:
+                    continue
+                path = board.bfs_path(board.player.pos, pos, blocked)
+                if path:
+                    (near if len(path) <= 4 else far).append(pos)
+        cands = near or far
+        if cands:
+            pos = random.choice(cands)
+            board.items[pos] = "화염탄"
+            self.message = "탄이 다 떨어져서 화염탄이 새로 나타났다"
 
     def end_turn(self):
         """턴 끝: 남은 손패를 버리고 다음 턴 시작."""
@@ -132,8 +168,11 @@ class Battle:
         elif card == "발사":
             self.fire()
         elif card == "재장전":
-            if self.magazine.reload():
+            if self.magazine.is_empty():
+                self.message = "탄창이 비어 있어서 재장전할 게 없다"
+            elif self.magazine.reload():
                 self.message = "재장전: 센 탄이 맨 위로"
+                self.sound("reload")
                 self.op("magazine", f"pop() x{len(self.magazine)} → 선택 정렬 → push()")
             else:
                 self.message = "[미구현] 선택 정렬 (표현 주서연) - 탄창 그대로"
@@ -152,6 +191,7 @@ class Battle:
         if board.enemy_at(nxt):
             p.hp -= 1
             self.message = "적과 부딪혔다! 체력 -1, 기절"
+            self.sound("hurt")
             # 피격: 다음 행동(큐 맨 앞)을 버리고 맨 뒤에 '기절' 넣기
             lost = self.queue.dequeue()
             if lost is not None:
@@ -172,6 +212,7 @@ class Battle:
                 del board.items[nxt]
                 self.message = f"{bullet} 장전"
                 self.op("magazine", f"push({bullet})")
+                self.sound("pickup")
             else:
                 self.message = "탄창이 꽉 차서 못 주웠다"
                 self.op("magazine", "push() 실패: 오버플로")
@@ -181,6 +222,7 @@ class Battle:
             try:
                 algorithms.reverse_queue(self.queue)
                 self.message = "뒤집기 타일! 남은 행동이 거꾸로"
+                self.sound("flip")
                 self.op("queue", "dequeue()→push() … pop()→enqueue()")
             except NotDone:
                 self.message = "[미구현] 큐 뒤집기 (기획 홍정현) - 순서 그대로"
@@ -199,6 +241,7 @@ class Battle:
             self.op("magazine", "pop() → 비어 있음")
             return
         self.op("magazine", f"pop() → {bullet}")
+        self.sound("fire")
 
         dx, dy = DIRS[p.facing]
         pos = p.pos
@@ -217,6 +260,7 @@ class Battle:
             enemy = board.enemy_at(pos)
             if enemy:
                 enemy.hp -= DAMAGE[bullet]
+                self.sound("hit")
                 if bullet == "빙결탄":
                     enemy.frozen = FREEZE_TURNS
                 board.remove_dead()
@@ -242,12 +286,15 @@ class Battle:
                 return
             if path:
                 self.op("grid", f"BFS: 최단 {len(path)}칸")
+            e.trail = []                # 이번 턴에 지나간 칸 (화면의 이동 애니메이션용)
             for nxt in path[:e.steps]:
                 if nxt == p.pos:        # 플레이어 칸에 닿음 → 공격하고 멈춤
                     p.hp -= 1
                     self.message = "적에게 공격당했다! 체력 -1"
+                    self.sound("hurt")
                     break
                 e.pos = nxt
+                e.trail.append(nxt)
 
     # ================= 승패 =================
     def check_state(self):
@@ -255,5 +302,7 @@ class Battle:
         p = self.board.player
         if p.hp <= 0:
             self.state = "fail"
+            self.sound("fail")
         elif not self.board.enemies and self.board.tile(p.pos) == EXIT:
             self.state = "clear"
+            self.sound("clear")
