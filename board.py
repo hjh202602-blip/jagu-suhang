@@ -12,6 +12,8 @@ from settings import N, MAX_HP
 
 # 타일 종류 (stages.py 맵 문자와 같음)
 FLOOR, WALL, EXIT, FLIP = ".", "#", "X", "R"
+FAR_DIST = 5   # 적이 플레이어와 이 칸 수 이상 떨어져 있으면 '멀다'고 보고 빨리 다가옴
+
 # 맵 문자 → 탄 이름
 ITEM_CHARS = {"f": "화염탄", "i": "빙결탄", "b": "폭발탄"}
 
@@ -36,12 +38,19 @@ class Enemy:
         self.steps = 0      # 이번 턴에 다가올 칸 수 (머리 위 숫자)
         self.trail = []     # 지난 적 차례에 지나간 칸들 (이동 애니메이션용)
 
-    def roll_steps(self):
-        """턴 시작마다 이동 칸 수를 1~3 중 랜덤으로 정함. 허수아비나 얼어 있는 적은 0."""
+    def roll_steps(self, dist=None):
+        """
+        턴 시작마다 이번 턴 이동 칸 수를 정함. 허수아비나 얼어 있는 적은 0.
+        dist: 플레이어까지 최단 경로 길이 (길이 없으면 None)
+          멀리 있으면(FAR_DIST 칸 이상) 2~3칸으로 빠르게 다가옴
+          가까우면 1~2칸, 가끔(10%) 3칸
+        """
         if self.kind == "dummy" or self.frozen > 0:
             self.steps = 0
+        elif dist is None or dist >= FAR_DIST:
+            self.steps = random.randint(2, 3)
         else:
-            self.steps = random.randint(1, 3)
+            self.steps = random.choices([1, 2, 3], weights=[45, 45, 10])[0]
 
 
 class Board:

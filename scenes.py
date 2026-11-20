@@ -15,7 +15,7 @@
 import pygame
 
 import assets
-from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK, WHITE,
+from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK, WHITE, GRAY,
                       MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY, OP_SHOW_TIME,
                       MOVE_SPEED, SORT_DELAY)
 from ui import box, label, font, Button
@@ -56,9 +56,9 @@ class HowToScene(Scene):
     """조작 설명 (기획서 4-4: 타이틀 → 조작 설명 → 1번 방)."""
 
     LINES = [
-        "1. 손에 뽑은 카드 6장 중 최대 5장을 눌러 오른쪽 행동 큐에 넣는다  (enqueue)",
+        "1. 손에 든 카드 6장 중 최대 5장을 끌어다 오른쪽 행동 큐에 놓는다  (enqueue)",
         "2. 실행 버튼(Enter)을 누르면 큐 맨 앞부터 하나씩 실행된다  (dequeue, 먼저 넣은 것이 먼저)",
-        "3. 실행이 끝나면 추적자가 머리 위 숫자만큼 최단 경로(BFS)로 다가온다",
+        "3. 실행이 끝나면 추적자가 머리 위 숫자만큼 최단 경로(BFS)로 다가온다 (멀면 빠르게)",
         "4. 탄을 밟으면 탄창 맨 위에 쌓이고, 발사하면 맨 위 탄이 나간다  (push / pop, 5칸)",
         "5. 재장전 카드: 탄을 다 꺼내 약한 순으로 정렬해 다시 넣는다 → 가장 센 탄이 맨 위",
         "6. 적에게 부딪히면 체력 -1, 다음 행동이 버려지고 맨 뒤에 '기절'이 들어온다",
@@ -120,10 +120,13 @@ class PlayScene(Scene):
         self.floats = []  # 화면에 떠 있는 자료구조 연산 글자 [where, 글자, 지난 시간(ms)]
         self.reset_anim()
 
-        # 클릭 영역
+        # 클릭·드롭 영역
         self.run_button = Button((W - 190, 545, 140, 55), "실행", 20)
         self.hand_rects = [pygame.Rect(280 + i * 112, 560, 100, 115) for i in range(6)]
         self.queue_rects = [pygame.Rect(W - 190, 105 + i * 68, 140, 55) for i in range(QUEUE_SIZE)]
+        self.queue_panel = pygame.Rect(W - 210, 30, 180, 490)   # 손패 카드를 여기 놓으면 큐에 들어감
+        self.hand_panel = pygame.Rect(260, 520, W - 490, 170)    # 큐 카드를 여기 놓으면 손패로 돌아감
+        self.drag = None   # 끌고 있는 카드 {"src": "hand"/"queue", "index", "card", "pos", "grab"}
 
     # ---------- 입력 ----------
     def handle(self, event):
@@ -134,6 +137,7 @@ class PlayScene(Scene):
             if event.key == pygame.K_r:                 # 이 스테이지 처음부터
                 self.battle = Battle(self.game.stage)
                 self.floats = []
+                self.drag = None
                 self.reset_anim()
                 return None
             if event.key == pygame.K_RETURN:
@@ -141,18 +145,31 @@ class PlayScene(Scene):
         if self.run_button.clicked(event):
             b.start_run()
 
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # 손패 클릭 → 큐 맨 뒤로
+        # 드래그 앤 드롭: 누르면 집고, 움직이면 따라오고, 떼면 놓은 곳에 따라 처리 (계획 중에만)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and b.phase == "plan":
             for i, r in enumerate(self.hand_rects):
                 if i < len(b.hand) and r.collidepoint(event.pos):
-                    b.queue_card(i)
+                    self.start_drag("hand", i, b.hand[i], r, event.pos)
                     return None
-            # 큐 클릭 → 손패로 되돌리기 (계획 중에만)
+            cards = b.queue.to_list()
             for i, r in enumerate(self.queue_rects):
-                if i < len(b.queue) and r.collidepoint(event.pos):
-                    b.unqueue_card(i)
+                if i < len(cards) and r.collidepoint(event.pos):
+                    self.start_drag("queue", i, cards[i], r, event.pos)
                     return None
+        elif event.type == pygame.MOUSEMOTION and self.drag:
+            self.drag["pos"] = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.drag:
+            d, self.drag = self.drag, None
+            if d["src"] == "hand" and self.queue_panel.collidepoint(event.pos):
+                b.queue_card(d["index"])            # 큐 맨 뒤에 enqueue
+            elif d["src"] == "queue" and not self.queue_panel.collidepoint(event.pos):
+                b.unqueue_card(d["index"])          # 큐 밖에 놓으면 손패로
         return None
+
+    def start_drag(self, src, index, card, rect, mouse):
+        """카드 집기. grab = 카드 왼쪽 위에서 마우스까지 거리 (집은 자리 그대로 따라오게)."""
+        self.drag = {"src": src, "index": index, "card": card, "pos": mouse,
+                     "grab": (mouse[0] - rect.x, mouse[1] - rect.y)}
 
     # ---------- 애니메이션 ----------
     def reset_anim(self):
@@ -251,6 +268,24 @@ class PlayScene(Scene):
         self.draw_queue(surf)
         self.draw_hand(surf)
         self.draw_ops(surf)
+        self.draw_drag(surf)
+
+    def draw_drag(self, surf):
+        """끌고 있는 카드를 마우스 위치에 그리고, 놓을 수 있는 곳을 굵게 표시."""
+        d = self.drag
+        if not d:
+            return
+        target = self.queue_panel if d["src"] == "hand" else self.hand_panel
+        pygame.draw.rect(surf, BLACK, target, 6)
+        mx, my = d["pos"]
+        gx, gy = d["grab"]
+        if d["src"] == "hand":
+            assets.draw_card(surf, pygame.Rect(mx - gx, my - gy, 100, 115), d["card"])
+        else:                                       # 큐 칸 모양 그대로
+            rect = pygame.Rect(mx - gx, my - gy, 140, 55)
+            pygame.draw.rect(surf, WHITE, rect)
+            box(surf, rect, 2)
+            label(surf, *rect.center, d["card"], 16)
 
     # 연산 글자를 띄울 위치 (영역별 기준점)
     OP_POS = {
@@ -312,6 +347,8 @@ class PlayScene(Scene):
                 pygame.draw.rect(surf, BLACK, rect, 1)      # 칸 테두리
         box(surf, (GRID_X, GRID_Y, N * CELL, N * CELL))
 
+        self.draw_range(surf)
+
         # 바닥의 탄
         for pos, bullet in board.items.items():
             assets.draw_item(surf, self.cell_rect(pos), bullet)
@@ -329,6 +366,31 @@ class PlayScene(Scene):
         p = board.player
         assets.draw_player(surf, self.cell_rect(self.shown_pos(p)), p.facing)
 
+    def draw_range(self, surf):
+        """
+        공격 범위: 지금 발사하면 탄창 맨 위 탄이 날아갈 칸을 옅게 칠함.
+        맞는 적 칸은 굵은 테두리, 폭발탄이면 부서질 벽에 X 표시. 탄창이 비면 회색 점선만.
+        """
+        b = self.battle
+        cells, stop = b.fire_line()
+        top = b.magazine.peek()
+        if top is None:                     # 탄이 없으면 쏠 수 없음 → 점으로만 방향 표시
+            for pos in cells:
+                pygame.draw.circle(surf, GRAY, self.cell_rect(pos).center, 3)
+            return
+        color = assets.BULLET_COLOR[top]
+        shade = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
+        shade.fill((*color, 80))
+        for pos in cells:
+            surf.blit(shade, self.cell_rect(pos))
+        if stop:
+            rect = self.cell_rect(stop)
+            if b.board.enemy_at(stop):
+                pygame.draw.rect(surf, color, rect.inflate(-4, -4), 4)
+            elif top == "폭발탄":
+                pygame.draw.line(surf, color, rect.topleft, rect.bottomright, 4)
+                pygame.draw.line(surf, color, rect.topright, rect.bottomleft, 4)
+
     def draw_hud(self, surf):
         """격자 바로 아래: 스테이지, 체력, 턴, 최근 사건."""
         b = self.battle
@@ -345,7 +407,7 @@ class PlayScene(Scene):
         cards = b.queue.to_list()
         for i, r in enumerate(self.queue_rects):
             box(surf, r, 2)
-            if i < len(cards):
+            if i < len(cards) and not self.dragging("queue", i):
                 label(surf, *r.center, f"{i + 1}. {cards[i]}", 16)
         label(surf, W - 120, 465, "▼ 새 카드 (rear)", 13)
         if b.phase == "run":
@@ -357,10 +419,14 @@ class PlayScene(Scene):
         """아래: 이번 턴에 뽑은 카드."""
         b = self.battle
         box(surf, (260, 520, W - 490, 170))
-        label(surf, (260 + W - 230) // 2, 538, "손에 뽑은 카드  (클릭: 큐에 넣기 / 큐 카드 클릭: 되돌리기)", 15)
+        label(surf, (260 + W - 230) // 2, 538, "손에 든 카드  (끌어서 행동 큐에 놓기 / 큐 카드를 여기로 끌면 되돌리기)", 15)
         for i, r in enumerate(self.hand_rects):
-            if i < len(b.hand):
+            if i < len(b.hand) and not self.dragging("hand", i):
                 assets.draw_card(surf, r, b.hand[i])
+
+    def dragging(self, src, i):
+        """그 카드를 지금 끌고 있으면 True (원래 자리에는 안 그림)."""
+        return self.drag is not None and self.drag["src"] == src and self.drag["index"] == i
 
 
 # ======================================================================
@@ -377,7 +443,7 @@ class PauseScene(Scene):
 
     def draw(self, surf):
         label(surf, W // 2, 250, "일시정지", 40)
-        label(surf, W // 2, 290, "조작: 카드 클릭 / Enter 실행 / R 다시 시작 / ESC 일시정지", 15)
+        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지", 15)
         self.resume.draw(surf)
         self.quit.draw(surf)
 

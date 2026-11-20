@@ -19,7 +19,7 @@ from settings import DIRS, HAND_SIZE, QUEUE_SIZE, N
 from structures import Queue
 from todo import NotDone
 from board import Board, EXIT, FLIP, FLOOR
-from cards import Deck
+from cards import Deck, TURN_CARDS
 from magazine import Magazine
 from stages import STAGES
 
@@ -37,6 +37,7 @@ class Battle:
         self.board = Board(STAGES[stage_no - 1])
         self.deck = Deck()
         self.hand = []                      # 이번 턴에 뽑은 카드 (그냥 리스트)
+        self.free = []                      # 이번 턴에 받은 기본 카드 중 아직 안 버린 것 (더미로 안 돌아감)
         self.queue = Queue(QUEUE_SIZE)      # 행동 큐
         self.magazine = Magazine()          # 마법 탄창 (스택)
         self.turn = 0
@@ -73,10 +74,16 @@ class Battle:
     def start_turn(self):
         """새 턴: 카드 뽑기, 적 이동 칸 수 정하기."""
         self.turn += 1
-        self.hand = self.deck.draw(HAND_SIZE)
-        self.op("deck", f"pop() x{len(self.hand)}")
+        # 기본 카드 2장(앞으로 이동 + 회전 1장)은 매 턴 보장, 나머지는 더미에서 뽑음
+        self.free = ["앞으로 이동", random.choice(TURN_CARDS)]
+        drawn = self.deck.draw(HAND_SIZE - len(self.free))
+        self.hand = self.free + drawn
+        self.op("deck", f"pop() x{len(drawn)}")
+        p = self.board.player
         for e in self.board.enemies:
-            e.roll_steps()
+            others = {o.pos for o in self.board.enemies if o is not e}
+            path = self.board.bfs_path(e.pos, p.pos, blocked=others)
+            e.roll_steps(len(path) if path else None)
         self.refill_ammo()
         self.phase = "plan"
 
@@ -104,9 +111,20 @@ class Battle:
             board.items[pos] = "화염탄"
             self.message = "탄이 다 떨어져서 화염탄이 새로 나타났다"
 
+    def discard(self, cards):
+        """
+        쓴 카드를 버린 카드 스택에 쌓기.
+        기본 카드와 기절은 더미 밖에서 온 카드라 버린 카드에 넣지 않고 그냥 사라짐.
+        """
+        for card in cards:
+            if card in self.free:
+                self.free.remove(card)
+            elif card != STUN:
+                self.deck.discard_cards([card])
+
     def end_turn(self):
         """턴 끝: 남은 손패를 버리고 다음 턴 시작."""
-        self.deck.discard_cards(self.hand)
+        self.discard(self.hand)
         self.hand = []
         self.start_turn()
 
@@ -142,8 +160,7 @@ class Battle:
             card = self.queue.dequeue()
             self.op("queue", f"dequeue() → {card}")
             self.do_action(card)
-            if card != STUN:                # 기절은 진짜 카드가 아니라 버리지 않음
-                self.deck.discard_cards([card])
+            self.discard([card])
             self.check_state()
         else:
             self.enemy_turn()
@@ -156,6 +173,9 @@ class Battle:
         p = self.board.player
         if card == "앞으로 이동":
             self.move_player(DIRS[p.facing])
+        elif card == "2칸 앞으로":
+            if self.move_player(DIRS[p.facing]) and self.state == "playing":
+                self.move_player(DIRS[p.facing])
         elif card == "뒤로 이동":
             dx, dy = DIRS[p.facing]
             self.move_player((-dx, -dy))   # 방향은 그대로, 뒤로 한 칸
@@ -180,14 +200,14 @@ class Battle:
             self.message = "기절해서 한 박자 쉬었다"
 
     def move_player(self, d):
-        """플레이어를 d 방향으로 한 칸. 벽이면 멈추고, 적이면 부딪혀서 체력 -1."""
+        """플레이어를 d 방향으로 한 칸. 벽이면 멈추고, 적이면 부딪혀서 체력 -1. 움직였으면 True."""
         board = self.board
         p = board.player
         nxt = (p.pos[0] + d[0], p.pos[1] + d[1])
 
         if not board.in_bounds(nxt) or board.is_wall(nxt):
             self.message = "벽에 막혔다"
-            return
+            return False
         if board.enemy_at(nxt):
             p.hp -= 1
             self.message = "적과 부딪혔다! 체력 -1, 기절"
@@ -196,11 +216,10 @@ class Battle:
             lost = self.queue.dequeue()
             if lost is not None:
                 self.op("queue", f"dequeue() → {lost} 버림")
-                if lost != STUN:
-                    self.deck.discard_cards([lost])
+                self.discard([lost])
             self.queue.enqueue(STUN)
             self.op("queue", f"enqueue({STUN})")
-            return
+            return False
 
         p.pos = nxt
         self.message = ""
@@ -230,6 +249,27 @@ class Battle:
         # 출구: 적이 남아 있으면 안내만
         if board.tile(nxt) == EXIT and board.enemies:
             self.message = "적을 모두 쓰러뜨려야 출구가 열린다"
+        return True
+
+    def fire_line(self):
+        """
+        지금 발사하면 탄이 날아갈 칸들 (화면에 공격 범위로 표시).
+        반환: (지나가는 칸 리스트, 멈추는 칸)  멈추는 칸은 적 칸·벽 칸, 격자 밖이면 None
+        """
+        board = self.board
+        p = board.player
+        dx, dy = DIRS[p.facing]
+        pos = p.pos
+        cells = []
+        while True:
+            pos = (pos[0] + dx, pos[1] + dy)
+            if not board.in_bounds(pos):
+                return cells, None
+            if board.is_wall(pos):
+                return cells, pos
+            cells.append(pos)
+            if board.enemy_at(pos):
+                return cells, pos
 
     def fire(self):
         """탄창 맨 위 탄을 pop 해서 바라보는 방향으로 직선 발사."""

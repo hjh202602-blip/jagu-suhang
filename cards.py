@@ -2,14 +2,27 @@
 카드와 카드 더미 (담당: 기획)
 - 카드는 이름 문자열로 표현 (예: "앞으로 이동")
 - 카드 더미와 버린 카드는 둘 다 Stack: 맨 위에서만 뽑고, 쓴 카드는 위에 쌓임
+- 매 턴 손패 = 기본 카드 2장(앞으로 이동 + 회전 1장) + 더미에서 뽑은 4장
+  기본 카드는 더미 밖에서 매번 새로 받는 카드라 다 쓰면 사라짐 (버린 카드로 안 감)
 """
 import random
 
 from structures import Stack
 
-# 카드 6종 (기획서 4-2)
-CARD_TYPES = ["앞으로 이동", "뒤로 이동", "왼쪽 보기", "오른쪽 보기", "발사", "재장전"]
-COPIES = 3  # 종류마다 3장씩, 총 18장
+# 카드 종류와 더미에 들어가는 장수 (총 15장)
+# 앞으로 이동 + 회전 카드 1장은 매 턴 '기본 카드'로 따로 받으므로, 더미에서 뽑히는 장수만 적음
+# 뒤로 이동, 재장전은 자주 나오면 답답해서 1장씩만
+CARD_COUNTS = {
+    "앞으로 이동": 3,
+    "2칸 앞으로": 2,     # 가끔 나오는 강한 이동 카드
+    "왼쪽 보기": 2,
+    "오른쪽 보기": 2,
+    "발사": 4,
+    "뒤로 이동": 1,
+    "재장전": 1,
+}
+CARD_TYPES = list(CARD_COUNTS)
+TURN_CARDS = ["왼쪽 보기", "오른쪽 보기"]
 
 
 class Deck:
@@ -18,7 +31,9 @@ class Deck:
     def __init__(self):
         self.draw_pile = Stack()
         self.discard = Stack()
-        cards = CARD_TYPES * COPIES
+        cards = []
+        for name, count in CARD_COUNTS.items():
+            cards += [name] * count
         random.shuffle(cards)   # 섞기는 필수 알고리즘이 아니라 라이브러리 사용
         for card in cards:
             self.draw_pile.push(card)
