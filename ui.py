@@ -304,6 +304,10 @@ class Button:
         label(surf, cx, cy, self.text, size, GOLD if hover else CREAM)
 
     def clicked(self, event):
-        """이 이벤트가 버튼 위에서 왼쪽 클릭이면 True."""
-        return (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
-                and self.rect.collidepoint(event.pos))
+        """이 이벤트가 버튼 위에서 왼쪽 클릭이면 True (누르는 소리도 냄)."""
+        hit = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+               and self.rect.collidepoint(event.pos))
+        if hit:
+            import assets              # assets 가 ui 를 불러 쓰므로 여기서 늦게 불러옴
+            assets.play("click")
+        return hit

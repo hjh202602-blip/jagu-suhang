@@ -46,3 +46,4 @@ OP_SHOW_TIME = 1200      # pop(), enqueue() 같은 자료구조 연산 글자가
 MOVE_SPEED = 0.012       # 이동 애니메이션 속도 (칸/ms → 한 칸에 약 80ms)
 SORT_DELAY = 450         # 재장전 정렬 애니메이션 한 단계 보여주는 시간(ms)
 MUSIC_VOLUME = 0.45      # 배경음악 크기 (0~1). 효과음보다 작게
+SFX_VOLUME = 0.8         # 효과음 크기 (0~1)

@@ -17,7 +17,7 @@ import random
 
 import pygame
 
-from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE, MUSIC_VOLUME
+from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE, MUSIC_VOLUME, SFX_VOLUME
 from ui import box, label, font, fit_size
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
@@ -251,14 +251,29 @@ def _make_sound(name):
     return pygame.mixer.Sound(buffer=data.tobytes())
 
 
+def _load_sounds(name):
+    """
+    효과음 후보 목록. assets/sounds/<이름>_1.wav, _2.wav ... (LMMS 로 만든 것, assets/make_sfx.py) 가 있으면
+    그 파일들, 없으면 코드로 만든 소리 하나.
+    """
+    files = []
+    k = 1
+    while os.path.isfile(os.path.join(SOUND_DIR, f"{name}_{k}.wav")):
+        files.append(pygame.mixer.Sound(os.path.join(SOUND_DIR, f"{name}_{k}.wav")))
+        k += 1
+    return files or [_make_sound(name)]
+
+
 def play(name):
-    """효과음 재생. 소리 장치가 없으면 조용히 넘어감."""
+    """효과음 재생 (버전이 여러 개면 무작위로 하나). 소리 장치가 없으면 조용히 넘어감."""
     try:
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         if name not in _sounds:
-            _sounds[name] = _make_sound(name)
-        _sounds[name].play()
+            _sounds[name] = _load_sounds(name)
+        snd = random.choice(_sounds[name])
+        snd.set_volume(SFX_VOLUME)
+        snd.play()
     except (pygame.error, KeyError):
         pass
 

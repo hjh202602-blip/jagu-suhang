@@ -97,7 +97,7 @@ def seq(items, start=0, vol=100):
     return out
 
 
-def project(bpm, bars, tracks, path):
+def project(bpm, bars, tracks, path, wet=0.35, size=0.86):
     """곡 프로젝트(.mmp) 저장. 마스터에 리버브, 반복 구간 표시, 끝에 잔향용 빈 마디."""
     root = ET.Element("lmms-project", version="1.0", creator="LMMS", creatorversion="1.2.2", type="song")
     ET.SubElement(root, "head", timesig_numerator="4", timesig_denominator="4", bpm=str(bpm),
@@ -113,9 +113,9 @@ def project(bpm, bars, tracks, path):
     mixer = ET.SubElement(song, "fxmixer", visible="0", x="0", y="0", width="500", height="300")
     master = ET.SubElement(mixer, "fxchannel", num="0", name="Master", volume="1", muted="0", soloed="0")
     chain = ET.SubElement(master, "fxchain", enabled="1", numofeffects="1")
-    eff = ET.SubElement(chain, "effect", name="reverbsc", on="1", wet="0.35", gate="0", autoquit="1",
+    eff = ET.SubElement(chain, "effect", name="reverbsc", on="1", wet=str(wet), gate="0", autoquit="1",
                         autoquit_numerator="4", autoquit_denominator="4", syncmode="0")
-    ET.SubElement(eff, "reverbsc", input_gain="0", size="0.86", color="9000", output_gain="0")
+    ET.SubElement(eff, "reverbsc", input_gain="0", size=str(size), color="9000", output_gain="0")
     ET.SubElement(eff, "key")
     ET.SubElement(song, "timeline", lp0pos="0", lp1pos=str(bars * BAR), lpstate="1")
     ET.SubElement(song, "controllers")

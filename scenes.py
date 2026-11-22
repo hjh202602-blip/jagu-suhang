@@ -128,6 +128,7 @@ class SelectScene(Scene):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i, r in enumerate(self.cards):
                 if r.collidepoint(event.pos):
+                    assets.play("click")
                     self.game.start_from(i + 1)
                     return "play"
 
@@ -229,10 +230,13 @@ class PlayScene(Scene):
             self.drag["pos"] = event.pos
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.drag:
             d, self.drag = self.drag, None
+            before = len(b.queue)
             if d["src"] == "hand" and self.queue_panel.collidepoint(event.pos):
                 b.queue_card(d["index"])            # 큐 맨 뒤에 enqueue
             elif d["src"] == "queue" and not self.queue_panel.collidepoint(event.pos):
                 b.unqueue_card(d["index"])          # 큐 밖에 놓으면 손패로
+            if len(b.queue) != before:              # 실제로 카드가 옮겨졌을 때만 '착'
+                assets.play("card")
         return None
 
     def start_drag(self, src, index, card, rect, mouse):

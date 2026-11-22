@@ -66,6 +66,19 @@ LMMS 로 만든 무한 반복 BGM 2곡. 끝의 잔향을 처음에 겹쳐서 끝
 
 곡을 고치려면 `assets/music/*.mmp` 를 LMMS 에서 열어 수정하거나, `assets/make_bgm.py` 의 악보를 고친 뒤 `python assets/make_bgm.py` (LMMS + numpy 필요). 크기는 `settings.py` 의 `MUSIC_VOLUME`.
 
+## 효과음
+
+LMMS 로 만든 효과음 5종, 종류마다 2가지 버전 (`assets/sounds/<이름>_1.wav`, `_2.wav`). 틀 때마다 둘 중 하나를 무작위로 골라 덜 반복적으로 들림.
+| 이름 | 언제 | 소리 |
+|---|---|---|
+| `click` | 버튼·스테이지 카드 누르기 | 나무 '톡' |
+| `card` | 카드를 행동 큐에 놓기 / 손패로 되돌리기 | 탁자에 종이 카드 '착' |
+| `hit` | 탄이 적에게 맞음 | 둔탁한 타격 |
+| `hurt` | 플레이어가 부딪히거나 공격받음 | 무거운 쿵 + 불협화음 |
+| `clear` | 스테이지 클리어 | 하프 / 비브라폰 팡파레 |
+
+같은 이름으로 `_3.wav` 를 더 넣으면 후보가 늘어남. 크기는 `settings.py` 의 `SFX_VOLUME`.
+
 ## 조작
 
 | 입력 | 동작 |
@@ -122,6 +135,7 @@ LMMS 로 만든 무한 반복 BGM 2곡. 끝의 잔향을 처음에 겹쳐서 끝
 |---|---|---|
 | 그래픽 (탁자·양피지·토큰·말·UI) | 직접 제작 (Pygame 도형 + 노이즈, `assets/make_theme.py`, `assets/make_units.py`, `ui.py`) | 자체 제작 |
 | 그래픽 (카드) | 표현 담당(디자이너) 직접 제작 카드 시트 `assets/images/card_sheet.png` → `assets/make_cards.py` 로 잘라 쓰고 없는 카드는 합성 | 자체 제작 |
-| 효과음 | 직접 제작 (코드로 생성, `assets.py` 의 `SOUND_SHAPES`) | 자체 제작 |
+| 효과음 (버튼·카드·타격·피격·클리어) | 직접 제작 (LMMS 1.2.2, 프로젝트 `assets/sounds/lmms/*.mmp` → `assets/make_sfx.py`) | 자체 제작 |
+| 효과음 (발사·줍기·재장전·뒤집기·실패) | 직접 제작 (코드로 생성, `assets.py` 의 `SOUND_SHAPES`) | 자체 제작 |
 | 배경음악 | 직접 제작 (LMMS 1.2.2, 프로젝트 `assets/music/title.mmp`, `game.mmp` → `assets/make_bgm.py` 로 렌더링·반복 처리) | 자체 제작 |
 | 생성형 AI | Claude: 기본 틀 코드 작성 보조, BFS·조작 설명·별점·연산 표시 작성 보조 (개발 담당) | 활용 내역 기록 |
