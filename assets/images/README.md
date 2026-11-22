@@ -17,9 +17,25 @@
 | `card_turn_left.png` / `card_turn_right.png` | 왼쪽 보기 / 오른쪽 보기 카드 | 237x330 |
 | `card_fire.png` / `card_reload.png` | 발사 / 재장전 카드 | 237x330 |
 
+### 전체 컨셉: 나무 탁자 위 양피지 보드게임 (중세풍)
+
+`python assets/make_theme.py` 로 만드는 그림 (numpy 필요, 게임 실행에는 필요 없음)
+| 파일 | 내용 |
+|---|---|
+| `bg_table.png` | 화면 전체 나무 탁자 (가장자리 어둡게, 가운데 촛불 빛) |
+| `parchment.png` | 패널·칸에 깔리는 양피지 무늬 |
+| `board.png` | 격자를 담은 양피지 지도 (찢긴 가장자리, 잉크 격자, A~J / 1~10 좌표) |
+| `wall.png` | 돌 블록 토큰 |
+| `exit.png` / `exit_open.png` | 출구 문 (닫힘 / 적을 다 잡아 열림) |
+| `flip.png` | 뒤집기 타일 (놋쇠 판) |
+| `bullet_fire.png` / `bullet_ice.png` / `bullet_bomb.png` | 탄 보석 토큰 (불꽃 루비 / 얼음 결정 / 심지 폭탄) |
+| `card_cover.png` | 카드 더미에 엎어 둔 카드 뒷면 |
+
+패널·버튼·두루마리·봉랍 같은 화면 장식은 `ui.py` 에서 그림.
+
 ### 유닛 그림 (player / chaser / dummy)
 
-`python assets/make_units.py` 로 그린 그림 (카드와 같은 갈색 가죽·금색·양피지 톤). 92x92 로 저장.
+`python assets/make_units.py` 로 그린 그림 (카드와 같은 갈색 가죽·금색·양피지 톤). 둥근 받침 위에 선 보드게임 말 모양, 92x92 로 저장.
 플레이어는 돌리지 않고 그대로 그리고, 바라보는 방향은 칸 가장자리의 금색 화살촉으로 표시.
 
 ### 카드 그림 만드는 법

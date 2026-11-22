@@ -15,12 +15,16 @@
 import pygame
 
 import assets
-from settings import (W, H, N, CELL, GRID_X, GRID_Y, BLACK, WHITE, GRAY,
+import ui
+from settings import (W, H, N, CELL, GRID_X, GRID_Y, INK, INK_LIGHT, CREAM, GOLD, WAX,
                       MAX_HP, QUEUE_SIZE, MAGAZINE_SIZE, STEP_DELAY, OP_SHOW_TIME,
                       MOVE_SPEED, SORT_DELAY)
-from ui import box, label, font, Button
+from ui import label, font, Button
 from battle import Battle
-from stages import STAGE_NAMES, stars
+from board import EXIT
+from stages import STAGE_NAMES, STAGE_DESC, STAGE_LEVEL, STAGES, stars
+
+STAR = (196, 128, 30)   # 양피지 위 별 색 (진한 금)
 
 
 class Scene:
@@ -38,16 +42,33 @@ class Scene:
 
 # ======================================================================
 class TitleScene(Scene):
+    """타이틀: 탁자 위 두루마리 + 흩어 놓은 카드와 말."""
+
     def __init__(self):
-        self.start = Button((W // 2 - 100, 420, 200, 60), "게임 시작", 24)
+        self.start = Button((W // 2 - 120, 468, 240, 66), "게임 시작", 26)
 
     def handle(self, event):
         if self.start.clicked(event):
             return "howto"
 
     def draw(self, surf):
-        label(surf, W // 2, 220, "격자 사냥", 64)
-        label(surf, W // 2, 300, "마법 학교 견습생, 탄창 하나로 미궁을 탈출하라", 20)
+        # 왼쪽: 부채꼴로 펼친 카드, 오른쪽: 세워 둔 말과 탄 보석
+        for k, (name, ang, pos) in enumerate((("발사", 18, (150, 470)), ("재장전", 4, (200, 450)),
+                                               ("앞으로 이동", -12, (250, 462)))):
+            assets.draw_card_rotated(surf, name, pos, ang, 1.5)
+        assets.draw_piece(surf, "chaser", (1010, 430), 130)
+        assets.draw_piece(surf, "player", (900, 470), 120)
+        assets.draw_piece(surf, "dummy", (1090, 520), 96)
+        for k, b in enumerate(("화염탄", "빙결탄", "폭발탄")):
+            assets.draw_item(surf, pygame.Rect(930 + k * 54, 600, 56, 56), b)
+
+        ui.scroll(surf, (W // 2 - 290, 96, 580, 320))
+        label(surf, W // 2, 150, "마법 학교 졸업 시험", 18, INK_LIGHT, serif=True, bold=True)
+        label(surf, W // 2, 228, "격자 사냥", 76, INK, serif=True, bold=True)
+        pygame.draw.line(surf, INK_LIGHT, (W // 2 - 180, 290), (W // 2 + 180, 290), 2)
+        pygame.draw.polygon(surf, INK, [(W // 2, 282), (W // 2 + 8, 290), (W // 2, 298), (W // 2 - 8, 290)])
+        label(surf, W // 2, 328, "카드로 행동을 짜고, 탄창 하나로", 19, INK, serif=True)
+        label(surf, W // 2, 358, "지하 미궁을 탈출하라", 19, INK, serif=True)
         self.start.draw(surf)
 
 
@@ -56,54 +77,100 @@ class HowToScene(Scene):
     """조작 설명 (기획서 4-4: 타이틀 → 조작 설명 → 1번 방)."""
 
     LINES = [
-        "1. 손에 든 카드 6장 중 최대 5장을 끌어다 오른쪽 행동 큐에 놓는다  (enqueue)",
-        "2. 실행 버튼(Enter)을 누르면 큐 맨 앞부터 하나씩 실행된다  (dequeue, 먼저 넣은 것이 먼저)",
-        "3. 실행이 끝나면 추적자가 머리 위 숫자만큼 최단 경로(BFS)로 다가온다 (멀면 빠르게)",
-        "4. 탄을 밟으면 탄창 맨 위에 쌓이고, 발사하면 맨 위 탄이 나간다  (push / pop, 5칸)",
-        "5. 재장전 카드: 탄을 다 꺼내 약한 순으로 정렬해 다시 넣는다 → 가장 센 탄이 맨 위",
-        "6. 적에게 부딪히면 체력 -1, 다음 행동이 버려지고 맨 뒤에 '기절'이 들어온다",
-        "7. 뒤집기 타일을 밟으면 남은 행동 순서가 거꾸로 바뀐다",
-        "8. 적을 모두 쓰러뜨리고 출구에 서면 클리어. 적은 턴으로 깰수록 별이 많다",
+        "손에 든 카드 6장 중 최대 5장을 끌어다 오른쪽 행동 큐에 놓는다  (enqueue)",
+        "실행 버튼(Enter)을 누르면 큐 맨 앞부터 하나씩 실행된다  (dequeue, 먼저 넣은 것이 먼저)",
+        "실행이 끝나면 추적자가 머리 위 숫자만큼 최단 경로(BFS)로 다가온다 (멀면 빠르게)",
+        "탄을 밟으면 탄창 맨 위에 쌓이고, 발사하면 맨 위 탄이 나간다  (push / pop, 5칸)",
+        "재장전 카드: 탄을 다 꺼내 약한 순으로 정렬해 다시 넣는다 → 가장 센 탄이 맨 위",
+        "적에게 부딪히면 체력 -1, 다음 행동이 버려지고 맨 뒤에 '기절'이 들어온다",
+        "뒤집기 타일을 밟으면 남은 행동 순서가 거꾸로 바뀐다",
+        "적을 모두 쓰러뜨리면 출구가 열린다. 출구에 서면 클리어, 적은 턴일수록 별이 많다",
     ]
-    TAN = "탄:  화염탄 피해 2  /  빙결탄 피해 1 + 적이 멈춤  /  폭발탄 피해 1 + 앞의 벽을 부숨"
-    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지"
+    TAN = (("화염탄", "피해 2"), ("빙결탄", "피해 1 + 적이 멈춤"), ("폭발탄", "피해 1 + 앞의 벽을 부숨"))
+    KEYS = "Enter 실행   ·   R 방 다시 시작   ·   ESC 일시정지"
 
     def __init__(self):
-        self.next = Button((W // 2 - 100, 590, 200, 60), "시작하기", 24)
+        self.next = Button((W // 2 - 110, 618, 220, 62), "시작하기", 24)
 
     def handle(self, event):
         if self.next.clicked(event) or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
             return "select"
 
     def draw(self, surf):
-        label(surf, W // 2, 80, "조작 설명", 40)
+        ui.scroll(surf, (90, 34, W - 180, 560))
+        label(surf, W // 2, 84, "조작 설명", 34, INK, serif=True, bold=True)
+        pygame.draw.line(surf, INK_LIGHT, (W // 2 - 140, 110), (W // 2 + 140, 110), 2)
         for i, line in enumerate(self.LINES):
-            img = font(18).render(line, True, BLACK)
-            surf.blit(img, (170, 140 + i * 40))
-        label(surf, W // 2, 490, self.TAN, 17)
-        label(surf, W // 2, 530, self.KEYS, 17)
+            y = 138 + i * 40
+            ui.seal(surf, (150, y + 12), str(i + 1), 13)
+            img = font(18).render(line, True, INK)
+            surf.blit(img, (176, y))
+        for k, (name, text) in enumerate(self.TAN):
+            x = 160 + k * 300
+            assets.draw_item(surf, pygame.Rect(x, 460, 54, 54), name)
+            surf.blit(font(17, True, True).render(name, True, INK), (x + 60, 462))
+            surf.blit(font(15).render(text, True, INK_LIGHT), (x + 60, 488))
+        label(surf, W // 2, 548, self.KEYS, 16, INK)
         self.next.draw(surf)
 
 
 # ======================================================================
 class SelectScene(Scene):
-    """스테이지 선택. 고른 스테이지부터 시작."""
+    """스테이지 선택: 방마다 양피지 지도 한 장 (미리보기 + 난이도). 고른 방부터 시작."""
 
     def __init__(self, game):
         self.game = game
-        self.buttons = [Button((W // 2 - 330 + i * 230, 300, 200, 150), name, 24)
-                        for i, name in enumerate(STAGE_NAMES)]
+        self.cards = [pygame.Rect(W // 2 - 375 + i * 260, 150, 230, 440) for i in range(len(STAGE_NAMES))]
 
     def handle(self, event):
-        for i, b in enumerate(self.buttons):
-            if b.clicked(event):
-                self.game.start_from(i + 1)
-                return "play"
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, r in enumerate(self.cards):
+                if r.collidepoint(event.pos):
+                    self.game.start_from(i + 1)
+                    return "play"
 
     def draw(self, surf):
-        label(surf, W // 2, 180, "스테이지 선택", 40)
-        for b in self.buttons:
-            b.draw(surf)
+        ui.title(surf, W // 2, 82, "스테이지 선택", 44)
+        mouse = pygame.mouse.get_pos()
+        for i, r in enumerate(self.cards):
+            hover = r.collidepoint(mouse)
+            rr = r.move(0, -8) if hover else r                # 마우스를 올리면 살짝 들림
+            ui.panel(surf, rr)
+            if hover:
+                pygame.draw.rect(surf, GOLD, rr.inflate(6, 6), 4, border_radius=12)
+            label(surf, rr.centerx, rr.y + 36, STAGE_NAMES[i], 24, INK, serif=True, bold=True)
+            lv = STAGE_LEVEL[i]
+            label(surf, rr.centerx, rr.y + 70, "★" * lv + "☆" * (5 - lv), 20, STAR)
+            self.minimap(surf, STAGES[i], pygame.Rect(rr.centerx - 90, rr.y + 92, 180, 180))
+            label(surf, rr.centerx, rr.y + 300, STAGE_DESC[i], 16, INK)
+            ui.seal(surf, (rr.centerx, rr.y + 360), str(i + 1), 22)
+            label(surf, rr.centerx, rr.y + 404, "눌러서 시작", 14, INK_LIGHT)
+
+    def minimap(self, surf, stage_map, rect):
+        """맵 미리보기: 잉크로 그린 작은 지도 (벽, 출구, 플레이어, 적, 탄)."""
+        c = rect.w // N
+        pygame.draw.rect(surf, INK, rect.inflate(6, 6), 2)
+        for r, row in enumerate(stage_map):
+            for col, ch in enumerate(row):
+                cell = pygame.Rect(rect.x + col * c, rect.y + r * c, c, c)
+                pygame.draw.rect(surf, INK_LIGHT, cell, 1)
+                ctr = cell.center
+                if ch == "#":
+                    pygame.draw.rect(surf, (110, 100, 88), cell.inflate(-2, -2))
+                elif ch == "X":
+                    pygame.draw.rect(surf, (138, 86, 46), cell.inflate(-5, -3), border_radius=4)
+                elif ch == "R":
+                    pygame.draw.circle(surf, GOLD, ctr, c // 2 - 2)
+                elif ch == "P":
+                    pygame.draw.circle(surf, GOLD, ctr, c // 2 - 2)
+                    pygame.draw.circle(surf, INK, ctr, c // 2 - 2, 2)
+                elif ch == "E":
+                    pygame.draw.circle(surf, (70, 52, 92), ctr, c // 2 - 2)
+                elif ch == "D":
+                    pygame.draw.circle(surf, (168, 116, 66), ctr, c // 2 - 3)
+                elif ch in "fib":
+                    col_ = assets.BULLET_COLOR[{"f": "화염탄", "i": "빙결탄", "b": "폭발탄"}[ch]]
+                    pygame.draw.circle(surf, col_, ctr, c // 2 - 4)
 
 
 # ======================================================================
@@ -261,38 +328,37 @@ class PlayScene(Scene):
         return pygame.Rect(round(GRID_X + c * CELL), round(GRID_Y + r * CELL), CELL, CELL)
 
     def draw(self, surf):
-        box(surf, (10, 10, W - 20, H - 20))
-        self.draw_left(surf)
+        ui.board(surf)
         self.draw_grid(surf)
-        self.draw_hud(surf)
+        self.draw_left(surf)
+        self.draw_info(surf)
         self.draw_queue(surf)
         self.draw_hand(surf)
         self.draw_ops(surf)
         self.draw_drag(surf)
 
     def draw_drag(self, surf):
-        """끌고 있는 카드를 마우스 위치에 그리고, 놓을 수 있는 곳을 굵게 표시."""
+        """끌고 있는 카드를 마우스 위치에 그리고, 놓을 수 있는 곳을 금색으로 표시."""
         d = self.drag
         if not d:
             return
         target = self.queue_panel if d["src"] == "hand" else self.hand_panel
-        pygame.draw.rect(surf, BLACK, target, 6)
+        pygame.draw.rect(surf, GOLD, target.inflate(8, 8), 4, border_radius=14)
         mx, my = d["pos"]
         gx, gy = d["grab"]
         if d["src"] == "hand":
             assets.draw_card(surf, pygame.Rect(mx - gx, my - gy, 100, 115), d["card"])
         else:                                       # 큐 칸 모양 그대로
             rect = pygame.Rect(mx - gx, my - gy, 140, 55)
-            pygame.draw.rect(surf, WHITE, rect)
-            box(surf, rect, 2)
-            label(surf, *rect.center, d["card"], 16)
+            ui.slot(surf, rect, highlight=True)
+            label(surf, *rect.center, d["card"], 15)
 
     # 연산 글자를 띄울 위치 (영역별 기준점)
     OP_POS = {
-        "deck": (130, 192),          # 카드 더미 상자 안 아래쪽 ('버린 카드' 제목과 안 겹치게)
-        "magazine": (130, 414),      # 마법 탄창 위
-        "queue": (W - 120, 505),     # 행동 큐 아래
-        "grid": (GRID_X + N * CELL // 2, 19),  # 격자 위
+        "deck": (131, 194),          # 카드 더미 아래
+        "magazine": (131, 372),      # 마법 탄창 제목 위
+        "queue": (W - 120, 502),     # 행동 큐 아래
+        "grid": (891, 186),          # 오른쪽 상황판 (BFS)
     }
 
     def draw_ops(self, surf):
@@ -304,48 +370,73 @@ class PlayScene(Scene):
                 continue
             shown[where] = k + 1
             x, y = self.OP_POS[where]
-            img = font(13).render(text, True, BLACK)
-            img.set_alpha(int(255 * (1 - age / OP_SHOW_TIME)))
-            rect = img.get_rect(center=(x, y - k * 16 - age // 160))  # 위로 살짝 떠오름
-            pygame.draw.rect(surf, WHITE, rect.inflate(4, 0))
-            surf.blit(img, rect)
+            img = font(13, bold=True).render(text, True, INK)
+            rect = img.get_rect(center=(x, y - k * 18 - age // 160))  # 위로 살짝 떠오름
+            chip = pygame.Surface(rect.inflate(10, 4).size, pygame.SRCALPHA)
+            pygame.draw.rect(chip, (*CREAM, 235), chip.get_rect(), border_radius=5)
+            pygame.draw.rect(chip, (*INK_LIGHT, 255), chip.get_rect(), 1, border_radius=5)
+            chip.blit(img, (5, 2))
+            chip.set_alpha(int(255 * (1 - age / OP_SHOW_TIME)))
+            surf.blit(chip, rect.inflate(10, 4))
 
     def draw_left(self, surf):
-        """왼쪽: 카드 더미, 버린 카드, 마법 탄창."""
+        """왼쪽 양피지: 카드 더미(뒷면), 버린 카드(맨 위 카드), 마법 탄창."""
         deck = self.battle.deck
-        box(surf, (30, 30, 200, 660))
-        label(surf, 130, 60, "더미 카드", 17)
-        box(surf, (70, 80, 120, 130), 2)
-        label(surf, 130, 145, str(len(deck.draw_pile)), 30)
-        label(surf, 130, 240, "버린 카드", 17)
-        box(surf, (70, 260, 120, 130), 2)
-        label(surf, 130, 325, str(len(deck.discard)), 30)
+        cx = 131
+        ui.panel(surf, (24, 18, 214, 684))
 
-        # 마법 탄창: 아래 칸이 바닥(bottom), 채워진 가장 위 칸이 top
+        # 카드 더미: 엎어 둔 뒷면이 남은 장수만큼 겹쳐 쌓임 (최대 3장)
+        label(surf, cx, 42, "카드 더미", 17, serif=True, bold=True)
+        n = len(deck.draw_pile)
+        for k in range(min(3, n)):
+            r = pygame.Rect(0, 0, 74, 103)
+            r.center = (cx - 4 + k * 4, 122 - k * 4)
+            assets.draw_cover(surf, r)
+        if n == 0:
+            ui.slot(surf, pygame.Rect(cx - 37, 70, 74, 103))
+        label(surf, cx + 70, 122, f"{n}장", 14, INK_LIGHT, bold=True)
+
+        # 버린 카드: 맨 위(가장 최근에 버린) 카드만 앞면으로 보임 = 스택의 top
+        label(surf, cx, 222, "버린 카드", 17, serif=True, bold=True)
+        r = pygame.Rect(0, 0, 74, 103)
+        r.center = (cx, 296)
+        top = deck.discard.peek()
+        if top:
+            if len(deck.discard) > 1:
+                assets.draw_cover(surf, r.move(4, 3))
+            assets.draw_card(surf, r, top)
+        else:
+            ui.slot(surf, r)
+        label(surf, cx + 70, 296, f"{len(deck.discard)}장", 14, INK_LIGHT, bold=True)
+
+        # 마법 탄창: 아래 칸이 바닥(bottom), 채워진 가장 위 칸이 top (다음에 나갈 탄)
         bullets = self.battle.magazine.to_list()
         title = "마법 탄창"
         if self.sort_frames:                       # 재장전 중: 정렬 단계를 하나씩 보여 줌
             bullets = self.sort_frames[0]
             step = self.sort_total - len(self.sort_frames)
             title = f"선택 정렬 {step}/{self.sort_total - 1}" if self.sort_total > 1 else "이미 정렬됨"
-        label(surf, 130, 440, title, 17)
+        label(surf, cx, 394, title, 17, serif=True, bold=True)
         for i in range(MAGAZINE_SIZE):
-            slot_y = 460 + (MAGAZINE_SIZE - 1 - i) * 42   # i=0 이 맨 아래 칸
-            box(surf, (80, slot_y, 100, 38), 2)
+            y = 414 + (MAGAZINE_SIZE - 1 - i) * 54          # i=0 이 맨 아래 칸
+            rect = pygame.Rect(44, y, 174, 48)
+            is_top = i == len(bullets) - 1
+            ui.slot(surf, rect, highlight=is_top)
             if i < len(bullets):
-                label(surf, 130, slot_y + 19, bullets[i], 15)
-            if i == len(bullets) - 1:
-                label(surf, 205, slot_y + 19, "◀ top", 13)
+                assets.draw_item(surf, pygame.Rect(48, y + 1, 46, 46), bullets[i])
+                label(surf, 140, y + 24, bullets[i], 15, bold=is_top)
+            if is_top:
+                label(surf, 196, y + 24, "다음", 12, WAX, bold=True)
 
     def draw_grid(self, surf):
-        """가운데: 10x10 격자. 칸·탄·적·플레이어 그림은 assets.py 가 그림."""
+        """가운데: 양피지 지도 위의 토큰과 말. 칸·탄·적·플레이어 그림은 assets.py 가 그림."""
         board = self.battle.board
         for r in range(N):
             for c in range(N):
-                rect = self.cell_rect((c, r))
-                assets.draw_tile(surf, rect, board.tile((c, r)))
-                pygame.draw.rect(surf, BLACK, rect, 1)      # 칸 테두리
-        box(surf, (GRID_X, GRID_Y, N * CELL, N * CELL))
+                kind = board.tile((c, r))
+                if kind == EXIT and not board.enemies:      # 적을 다 잡으면 출구가 열림
+                    kind = "X_open"
+                assets.draw_tile(surf, self.cell_rect((c, r)), kind)
 
         self.draw_range(surf)
 
@@ -360,7 +451,7 @@ class PlayScene(Scene):
             if e.frozen > 0:
                 self.badge(surf, rect, "얼음", (190, 225, 250))
             elif e.kind == "chaser":
-                self.badge(surf, rect, str(e.steps), (238, 222, 186))
+                self.badge(surf, rect, str(e.steps), CREAM)
 
         # 플레이어
         p = board.player
@@ -369,14 +460,14 @@ class PlayScene(Scene):
     def draw_range(self, surf):
         """
         공격 범위: 지금 발사하면 탄창 맨 위 탄이 날아갈 칸을 옅게 칠함.
-        맞는 적 칸은 굵은 테두리, 폭발탄이면 부서질 벽에 X 표시. 탄창이 비면 회색 점선만.
+        맞는 적 칸은 굵은 테두리, 폭발탄이면 부서질 벽에 X 표시. 탄창이 비면 잉크 점만.
         """
         b = self.battle
         cells, stop = b.fire_line()
         top = b.magazine.peek()
         if top is None:                     # 탄이 없으면 쏠 수 없음 → 점으로만 방향 표시
             for pos in cells:
-                pygame.draw.circle(surf, GRAY, self.cell_rect(pos).center, 3)
+                pygame.draw.circle(surf, INK_LIGHT, self.cell_rect(pos).center, 3)
             return
         color = assets.BULLET_COLOR[top]
         shade = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
@@ -386,50 +477,75 @@ class PlayScene(Scene):
         if stop:
             rect = self.cell_rect(stop)
             if b.board.enemy_at(stop):
-                pygame.draw.rect(surf, color, rect.inflate(-4, -4), 4)
+                pygame.draw.rect(surf, color, rect.inflate(-4, -4), 4, border_radius=6)
             elif top == "폭발탄":
                 pygame.draw.line(surf, color, rect.topleft, rect.bottomright, 4)
                 pygame.draw.line(surf, color, rect.topright, rect.bottomleft, 4)
 
     def badge(self, surf, rect, text, color):
         """적 머리 위(칸 오른쪽 위) 작은 표: 이번 턴 이동 칸 수 또는 '얼음'."""
-        img = font(12).render(text, True, BLACK)
+        img = font(12, bold=True).render(text, True, INK)
         box_rect = img.get_rect().inflate(8, 2)
         box_rect.width = max(box_rect.width, box_rect.height)
         box_rect.topright = (rect.right - 1, rect.y + 1)
         pygame.draw.rect(surf, color, box_rect, border_radius=7)
-        pygame.draw.rect(surf, (52, 34, 22), box_rect, 2, border_radius=7)
+        pygame.draw.rect(surf, INK, box_rect, 2, border_radius=7)
         surf.blit(img, img.get_rect(center=box_rect.center))
 
-    def draw_hud(self, surf):
-        """격자 바로 아래: 스테이지, 체력, 턴, 최근 사건."""
+    def draw_info(self, surf):
+        """지도 오른쪽 상황판: 방 이름, 턴, 체력, 남은 적, 최근 사건, 탄 설명."""
         b = self.battle
-        hp = "♥" * b.board.player.hp + "♡" * (MAX_HP - b.board.player.hp)
-        cx = GRID_X + N * CELL // 2
-        label(surf, cx, 500, f"{STAGE_NAMES[b.stage_no - 1]}   체력 {hp}   턴 {b.turn}   {b.message}", 15)
+        x0, cx = 806, 891
+        ui.panel(surf, (x0, 18, 170, 484))
+        label(surf, cx, 44, STAGE_NAMES[b.stage_no - 1], 19, serif=True, bold=True)
+        label(surf, cx, 72, f"{b.turn} 턴", 16)
+        hp = b.board.player.hp
+        hearts = font(20).render("♥" * hp, True, WAX)
+        empty = font(20).render("♡" * (MAX_HP - hp), True, INK_LIGHT)
+        x = cx - (hearts.get_width() + empty.get_width()) // 2
+        surf.blit(hearts, (x, 88))
+        surf.blit(empty, (x + hearts.get_width(), 88))
+        chasers = sum(1 for e in b.board.enemies if e.kind == "chaser")
+        dummies = len(b.board.enemies) - chasers
+        left = f"남은 적  추적자 {chasers}" + (f" · 허수아비 {dummies}" if dummies else "")
+        label(surf, cx, 132, left if b.board.enemies else "적 전멸! 출구로", 13, INK if b.board.enemies else WAX, bold=True)
+        pygame.draw.line(surf, INK_LIGHT, (x0 + 18, 152), (x0 + 152, 152), 1)
+
+        # 최근 사건 (여러 줄)
+        label(surf, cx, 206, "최근 사건", 14, INK_LIGHT, bold=True)
+        ui.slot(surf, (x0 + 12, 220, 146, 120))
+        for k, line in enumerate(ui.wrap(b.message or "-", 14, 130)[:5]):
+            label(surf, cx, 240 + k * 22, line, 14)
+
+        # 탄 설명
+        label(surf, cx, 364, "탄 종류", 14, INK_LIGHT, bold=True)
+        for k, (name, text) in enumerate((("화염탄", "피해 2"), ("빙결탄", "피해 1 · 멈춤"), ("폭발탄", "피해 1 · 벽 부숨"))):
+            y = 380 + k * 38
+            assets.draw_item(surf, pygame.Rect(x0 + 10, y - 4, 40, 40), name)
+            label(surf, x0 + 104, y + 16, text, 13)
 
     def draw_queue(self, surf):
         """오른쪽: 행동 큐 (위가 먼저 실행되는 front) + 실행 버튼."""
         b = self.battle
-        box(surf, (W - 210, 30, 180, 490))
-        label(surf, W - 120, 55, "행동 큐", 19)
-        label(surf, W - 120, 85, "▲ 먼저 실행 (front)", 13)
+        ui.panel(surf, self.queue_panel, "행동 큐")
+        label(surf, W - 120, 87, "▲ 먼저 실행 (front)", 13, INK_LIGHT)
         cards = b.queue.to_list()
         for i, r in enumerate(self.queue_rects):
-            box(surf, r, 2)
+            ui.slot(surf, r, highlight=(i == 0 and b.phase == "run" and bool(cards)))
             if i < len(cards) and not self.dragging("queue", i):
-                label(surf, *r.center, f"{i + 1}. {cards[i]}", 16)
-        label(surf, W - 120, 465, "▼ 새 카드 (rear)", 13)
+                ui.seal(surf, (r.x + 20, r.centery), str(i + 1))
+                label(surf, r.centerx + 14, r.centery, cards[i], 15, bold=True)
+        label(surf, W - 120, 452, "▼ 새 카드 (rear)", 13, INK_LIGHT)
         if b.phase == "run":
-            label(surf, *self.run_button.rect.center, "실행 중...", 18)
+            label(surf, *self.run_button.rect.center, "실행 중...", 19, CREAM, serif=True, bold=True)
         else:
             self.run_button.draw(surf)
 
     def draw_hand(self, surf):
-        """아래: 이번 턴에 뽑은 카드."""
+        """아래: 이번 턴에 뽑은 카드 (가죽 매트 위)."""
         b = self.battle
-        box(surf, (260, 520, W - 490, 170))
-        label(surf, (260 + W - 230) // 2, 538, "손에 든 카드  (끌어서 행동 큐에 놓기 / 큐 카드를 여기로 끌면 되돌리기)", 15)
+        ui.mat(surf, self.hand_panel)
+        label(surf, self.hand_panel.centerx, 538, "손에 든 카드  ·  끌어서 행동 큐에 놓기  ·  큐 카드를 여기로 끌면 되돌리기", 14, CREAM)
         for i, r in enumerate(self.hand_rects):
             if i < len(b.hand) and not self.dragging("hand", i):
                 assets.draw_card(surf, r, b.hand[i])
@@ -441,9 +557,12 @@ class PlayScene(Scene):
 
 # ======================================================================
 class PauseScene(Scene):
-    def __init__(self):
-        self.resume = Button((W // 2 - 100, 330, 200, 55), "계속하기")
-        self.quit = Button((W // 2 - 100, 400, 200, 55), "타이틀로")
+    """일시정지: 하던 판을 어둡게 깔고 그 위에 양피지 한 장."""
+
+    def __init__(self, game=None):
+        self.game = game
+        self.resume = Button((W // 2 - 110, 342, 220, 58), "계속하기", 22)
+        self.quit = Button((W // 2 - 110, 414, 220, 58), "타이틀로", 22)
 
     def handle(self, event):
         if self.resume.clicked(event) or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
@@ -452,8 +571,14 @@ class PauseScene(Scene):
             return "title"
 
     def draw(self, surf):
-        label(surf, W // 2, 250, "일시정지", 40)
-        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지", 15)
+        if self.game and self.game.play:
+            self.game.play.draw(surf)
+            dim = pygame.Surface((W, H), pygame.SRCALPHA)
+            dim.fill((10, 5, 0, 200))
+            surf.blit(dim, (0, 0))
+        ui.panel(surf, (W // 2 - 260, 190, 520, 310))
+        label(surf, W // 2, 238, "일시정지", 36, INK, serif=True, bold=True)
+        label(surf, W // 2, 286, "카드 끌어 놓기 · Enter 실행 · R 다시 시작 · ESC 계속", 15, INK_LIGHT)
         self.resume.draw(surf)
         self.quit.draw(surf)
 
@@ -464,27 +589,28 @@ class TodoScene(Scene):
 
     def __init__(self, err):
         self.err = err   # todo.NotDone (어디, 담당)
-        self.back = Button((W // 2 - 100, 470, 200, 55), "타이틀로")
+        self.back = Button((W // 2 - 110, 470, 220, 58), "타이틀로", 22)
 
     def handle(self, event):
         if self.back.clicked(event):
             return "title"
 
     def draw(self, surf):
-        label(surf, W // 2, 200, "아직 구현되지 않은 부분이 있어요", 36)
-        label(surf, W // 2, 280, f"{self.err.where}", 26)
-        label(surf, W // 2, 325, f"담당: {self.err.who}", 22)
-        label(surf, W // 2, 390, "구현한 뒤 터미널에서  python check.py  로 확인하세요", 18)
+        ui.panel(surf, (W // 2 - 360, 140, 720, 300))
+        label(surf, W // 2, 200, "아직 구현되지 않은 부분이 있어요", 32, INK, serif=True, bold=True)
+        label(surf, W // 2, 270, f"{self.err.where}", 24, WAX, bold=True)
+        label(surf, W // 2, 315, f"담당: {self.err.who}", 20)
+        label(surf, W // 2, 380, "구현한 뒤 터미널에서  python check.py  로 확인하세요", 17, INK_LIGHT)
         self.back.draw(surf)
 
 
 # ======================================================================
 class ResultScene(Scene):
-    """결과: 성공/실패와 스테이지별 턴 수."""
+    """결과: 두루마리에 성공/실패, 방별 턴 수와 별, 전체 합계."""
 
     def __init__(self, game):
         self.game = game
-        self.retry = Button((W // 2 - 100, 480, 200, 60), "다시 하기", 24)
+        self.retry = Button((W // 2 - 120, 580, 240, 64), "다시 하기", 24)
 
     def handle(self, event):
         if self.retry.clicked(event):
@@ -492,18 +618,29 @@ class ResultScene(Scene):
 
     def draw(self, surf):
         g = self.game
-        label(surf, W // 2, 160, "탈출 성공!" if g.cleared else "실패...", 48)
+        ui.scroll(surf, (W // 2 - 300, 70, 600, 470))
+        if g.cleared:
+            label(surf, W // 2, 140, "탈출 성공!", 50, INK, serif=True, bold=True)
+            label(surf, W // 2, 190, "견습생은 무사히 미궁을 빠져나왔다", 17, INK_LIGHT, serif=True)
+        else:
+            label(surf, W // 2, 140, "실패...", 50, WAX, serif=True, bold=True)
+            label(surf, W // 2, 190, "미궁의 그림자에 붙잡혔다", 17, INK_LIGHT, serif=True)
+        pygame.draw.line(surf, INK_LIGHT, (W // 2 - 200, 220), (W // 2 + 200, 220), 2)
+
         total_stars = 0
+        y = 262
         for i, turns in enumerate(g.records):
             stage_no = g.first_stage + i
             n = stars(stage_no, turns)
             total_stars += n
-            label(surf, W // 2, 250 + i * 40,
-                  f"{STAGE_NAMES[stage_no - 1]} : {turns}턴   {'★' * n}{'☆' * (3 - n)}", 22)
-        y = 250 + len(g.records) * 40
+            label(surf, W // 2 - 110, y, STAGE_NAMES[stage_no - 1], 22, serif=True, bold=True)
+            label(surf, W // 2 + 20, y, f"{turns}턴", 22)
+            label(surf, W // 2 + 140, y, ui.stars_text(n), 24, STAR)
+            y += 50
         if not g.cleared:
-            label(surf, W // 2, y, f"{STAGE_NAMES[g.stage - 1]} : {g.failed_turns}턴째에 쓰러짐", 22)
+            label(surf, W // 2, y, f"{STAGE_NAMES[g.stage - 1]} : {g.failed_turns}턴째에 쓰러짐", 22, WAX)
         elif g.records:
-            label(surf, W // 2, y + 20,
-                  f"전체 {sum(g.records)}턴   별 {total_stars} / {len(g.records) * 3}", 24)
+            pygame.draw.line(surf, INK_LIGHT, (W // 2 - 200, y - 12), (W // 2 + 200, y - 12), 1)
+            label(surf, W // 2, y + 24, f"전체 {sum(g.records)}턴   ·   별 {total_stars} / {len(g.records) * 3}", 24,
+                  serif=True, bold=True)
         self.retry.draw(surf)

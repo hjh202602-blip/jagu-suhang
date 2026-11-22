@@ -1,6 +1,7 @@
 """
 유닛 그림 만들기 (표현 담당)
 카드 그림과 어울리게 갈색 가죽·금색·양피지 색으로 플레이어, 추적자, 허수아비를 그림.
+양피지 지도 위에 세워 둔 보드게임 말처럼 둥근 받침 위에 올림 (플레이어 = 놋쇠, 추적자 = 무쇠, 허수아비 = 나무).
 4배 크기로 그린 뒤 줄여서 저장 (가장자리가 부드럽게) → assets/images/ 에 PNG
 다시 만들기:  python assets/make_units.py
 """
@@ -169,13 +170,40 @@ def dummy():
     return s
 
 
+# 받침 색: (윗면, 옆면, 테두리 장식)
+BASES = {
+    "player": ((218, 170, 82), (150, 104, 40), (250, 214, 130)),    # 놋쇠
+    "chaser": ((70, 64, 72), (36, 32, 40), (140, 96, 170)),          # 무쇠 + 보라 띠
+    "dummy": ((168, 116, 66), (110, 70, 38), (206, 160, 104)),       # 나무
+}
+
+
+def piece(figure, kind):
+    """보드게임 말: 그림자 + 둥근 받침(옆면·윗면) + 그 위에 선 그림(조금 작게)."""
+    top, side, trim = BASES[kind]
+    s = canvas()
+    sh = canvas()
+    pygame.draw.ellipse(sh, (20, 10, 0, 120), (26, 146, 140, 36))
+    s.blit(pygame.transform.smoothscale(pygame.transform.smoothscale(sh, (23, 23)), (S, S)), (4, 2))
+    base = pygame.Rect(28, 134, 128, 40)
+    pygame.draw.ellipse(s, side, base.move(0, 10))                  # 옆면 (두께)
+    pygame.draw.rect(s, side, (base.x, base.centery, base.w, 10))
+    pygame.draw.ellipse(s, INK, base.move(0, 10), 4)
+    pygame.draw.ellipse(s, top, base)                               # 윗면
+    pygame.draw.ellipse(s, trim, base.inflate(-16, -10), 3)
+    pygame.draw.ellipse(s, INK, base, 4)
+    fig = pygame.transform.smoothscale(figure, (int(S * 0.8), int(S * 0.8)))
+    s.blit(fig, ((S - fig.get_width()) // 2, 4))                    # 발이 받침 윗면에 오도록
+    return s
+
+
 def main():
     pygame.init()
     pygame.display.set_mode((1, 1))
-    for name, fn in (("player.png", player), ("chaser.png", chaser), ("dummy.png", dummy)):
-        img = pygame.transform.smoothscale(fn(), (OUT, OUT))
-        pygame.image.save(img, os.path.join(IMG_DIR, name))
-        print("저장:", name)
+    for name, fn in (("player", player), ("chaser", chaser), ("dummy", dummy)):
+        img = pygame.transform.smoothscale(piece(fn(), name), (OUT, OUT))
+        pygame.image.save(img, os.path.join(IMG_DIR, name + ".png"))
+        print("저장:", name + ".png")
 
 
 if __name__ == "__main__":

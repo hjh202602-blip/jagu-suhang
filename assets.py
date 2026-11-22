@@ -27,6 +27,7 @@ IMAGE_FILES = {
     # 타일
     "wall": "wall.png",
     "exit": "exit.png",
+    "exit_open": "exit_open.png",       # 적을 다 잡아 열린 출구
     "flip": "flip.png",
     # 유닛: assets/make_units.py 로 그린 그림 (카드와 같은 갈색·금색 톤)
     # player.png 는 돌리지 않고 그대로 그리고, 바라보는 방향은 금색 화살촉으로 표시
@@ -37,6 +38,7 @@ IMAGE_FILES = {
     "화염탄": "bullet_fire.png",
     "빙결탄": "bullet_ice.png",
     "폭발탄": "bullet_bomb.png",
+    "cover": "card_cover.png",          # 카드 더미에 엎어 둔 카드 뒷면
     # 카드: card_sheet.png 에서 assets/make_cards.py 로 잘라 만든 그림 (비율 유지해서 그림)
     "앞으로 이동": "card_forward.png",
     "2칸 앞으로": "card_dash.png",
@@ -94,31 +96,27 @@ BULLET_COLOR = {"화염탄": (240, 120, 70), "빙결탄": (120, 190, 240), "폭�
 
 
 def draw_tile(surf, rect, kind):
-    """격자 한 칸의 바닥. kind: '.' 바닥, '#' 벽, 'X' 출구, 'R' 뒤집기 타일."""
+    """
+    격자 한 칸. kind: '.' 바닥(양피지 그대로), '#' 벽, 'X' 출구, 'X_open' 열린 출구, 'R' 뒤집기 타일.
+    벽·출구·뒤집기 그림은 assets/make_theme.py 로 만든 입체 토큰.
+    """
     if kind == "#":
         if not _blit(surf, "wall", rect):
             pygame.draw.rect(surf, WALL_COLOR, rect)
-            # 벽돌 줄무늬
-            for i in range(1, 3):
-                y = rect.y + rect.h * i // 3
-                pygame.draw.line(surf, BLACK, (rect.x, y), (rect.right, y), 1)
-            pygame.draw.line(surf, BLACK, (rect.centerx, rect.y), (rect.centerx, rect.y + rect.h // 3), 1)
-            pygame.draw.line(surf, BLACK, (rect.centerx, rect.bottom - rect.h // 3), (rect.centerx, rect.bottom), 1)
-    elif kind == "X":
-        if not _blit(surf, "exit", rect):
-            door = pygame.Rect(rect.x + 12, rect.y + 4, rect.w - 24, rect.h - 20)
-            pygame.draw.rect(surf, BLACK, door, 2, border_top_left_radius=9, border_top_right_radius=9)
-            pygame.draw.circle(surf, BLACK, (door.right - 5, door.centery + 2), 2)
-            label(surf, rect.centerx, rect.bottom - 8, "출구", 10)
+    elif kind in ("X", "X_open"):
+        if not _blit(surf, "exit_open" if kind == "X_open" else "exit", rect):
+            label(surf, *rect.center, "출구", 13)
     elif kind == "R":
         if not _blit(surf, "flip", rect):
             pygame.draw.rect(surf, FLIP_COLOR, rect)
-            # 위아래 화살표: 순서가 뒤집힘
-            cx, cy = rect.center
-            pygame.draw.polygon(surf, BLACK, [(cx - 8, cy - 4), (cx - 3, cy - 13), (cx + 2, cy - 4)])
-            pygame.draw.line(surf, BLACK, (cx - 3, cy - 4), (cx - 3, cy + 12), 2)
-            pygame.draw.polygon(surf, BLACK, [(cx - 2, cy + 4), (cx + 3, cy + 13), (cx + 8, cy + 4)])
-            pygame.draw.line(surf, BLACK, (cx + 3, cy - 12), (cx + 3, cy + 4), 2)
+            label(surf, *rect.center, "뒤집기", 11)
+
+
+def draw_cover(surf, rect):
+    """카드 뒷면 (카드 더미)."""
+    if not _blit(surf, "cover", rect, keep_ratio=True):
+        pygame.draw.rect(surf, (110, 64, 34), rect, border_radius=6)
+        pygame.draw.rect(surf, BLACK, rect, 2, border_radius=6)
 
 
 def draw_item(surf, rect, bullet):
@@ -181,6 +179,25 @@ def draw_card(surf, rect, name):
         box(surf, rect, 2)
         label(surf, rect.centerx, rect.y + 40, CARD_ICONS.get(name, ""), 30)
         label(surf, rect.centerx, rect.bottom - 25, name, 14)
+
+
+def draw_card_rotated(surf, name, center, angle, scale=1.0):
+    """장식용 카드 (타이틀 화면): 기울여서 그림자와 함께."""
+    raw = image(name, None)
+    if raw is None:
+        return
+    img = pygame.transform.rotozoom(raw, angle, 79 * scale / raw.get_width())
+    shadow = img.copy()
+    shadow.fill((20, 10, 0, 110), special_flags=pygame.BLEND_RGBA_MIN)
+    surf.blit(shadow, shadow.get_rect(center=(center[0] + 5, center[1] + 7)))
+    surf.blit(img, img.get_rect(center=center))
+
+
+def draw_piece(surf, kind, center, size):
+    """장식용 말 (타이틀 화면). kind: 'player' / 'chaser' / 'dummy'."""
+    img = image(kind, (size, size))
+    if img:
+        surf.blit(img, img.get_rect(center=center))
 
 
 # 맑은 고딕에 있는 기호만 사용 (없는 기호는 네모로 깨져 보임)

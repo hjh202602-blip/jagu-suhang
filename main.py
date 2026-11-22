@@ -11,7 +11,8 @@
 """
 import pygame
 
-from settings import W, H, FPS, WHITE
+import ui
+from settings import W, H, FPS
 from stages import STAGES
 from todo import NotDone
 from scenes import TitleScene, HowToScene, SelectScene, PlayScene, PauseScene, ResultScene, TodoScene
@@ -84,7 +85,7 @@ class Game:
             self.play = PlayScene(self)
             self.scene = self.play
         elif name == "pause":
-            self.scene = PauseScene()
+            self.scene = PauseScene(self)
         elif name == "resume":          # 일시정지에서 하던 판으로 복귀
             self.scene = self.play
         elif name == "result":
@@ -142,12 +143,12 @@ class Game:
                     self.change(nxt)
 
                 # 3) 그리기
-                self.screen.fill(WHITE)
+                ui.background(self.screen)
                 self.scene.draw(self.screen)
             except NotDone as err:
                 # 팀원이 아직 안 채운 함수가 불림 → 누가 무엇을 채워야 하는지 보여 줌
                 self.scene = TodoScene(err)
-                self.screen.fill(WHITE)
+                ui.background(self.screen)
                 self.scene.draw(self.screen)
             pygame.display.flip()
 
