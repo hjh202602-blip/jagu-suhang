@@ -28,7 +28,8 @@ IMAGE_FILES = {
     "wall": "wall.png",
     "exit": "exit.png",
     "flip": "flip.png",
-    # 유닛 (player.png 는 '위를 보는' 그림으로. 방향에 따라 자동으로 돌려서 씀)
+    # 유닛: assets/make_units.py 로 그린 그림 (카드와 같은 갈색·금색 톤)
+    # player.png 는 돌리지 않고 그대로 그리고, 바라보는 방향은 금색 화살촉으로 표시
     "player": "player.png",
     "chaser": "chaser.png",
     "dummy": "dummy.png",
@@ -149,19 +150,20 @@ def draw_enemy(surf, rect, kind):
 
 
 def draw_player(surf, rect, facing):
-    """플레이어. facing: 0 위, 1 오른쪽, 2 아래, 3 왼쪽."""
-    if _blit(surf, "player", rect, angle=-90 * facing):       # 시계 방향으로 회전
-        return
+    """플레이어. facing: 0 위, 1 오른쪽, 2 아래, 3 왼쪽. 바라보는 쪽 칸 가장자리에 금색 화살촉."""
+    if not _blit(surf, "player", rect):
+        cx, cy = rect.center
+        pygame.draw.circle(surf, WHITE, (cx, cy), 13)
+        pygame.draw.circle(surf, BLACK, (cx, cy), 13, 3)
     cx, cy = rect.center
     dx, dy = DIRS[facing]
-    # 몸: 흰 원 + 굵은 테두리, 바라보는 쪽에 지팡이(삼각형)
-    pygame.draw.circle(surf, WHITE, (cx, cy), 13)
-    pygame.draw.circle(surf, BLACK, (cx, cy), 13, 3)
-    tip = (cx + dx * 21, cy + dy * 21)
-    side = (-dy * 6, dx * 6)
-    base = (cx + dx * 11, cy + dy * 11)
-    pygame.draw.polygon(surf, BLACK, [tip, (base[0] + side[0], base[1] + side[1]),
-                                      (base[0] - side[0], base[1] - side[1])])
+    half = rect.w // 2
+    tip = (cx + dx * (half + 3), cy + dy * (half + 3))
+    base = (cx + dx * (half - 7), cy + dy * (half - 7))
+    side = (-dy * 7, dx * 7)
+    pts = [tip, (base[0] + side[0], base[1] + side[1]), (base[0] - side[0], base[1] - side[1])]
+    pygame.draw.polygon(surf, (236, 170, 60), pts)
+    pygame.draw.polygon(surf, (52, 34, 22), pts, 2)
 
 
 def draw_card(surf, rect, name):

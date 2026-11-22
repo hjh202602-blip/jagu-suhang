@@ -8,7 +8,7 @@
 | `wall.png` | 벽 | 46x46 |
 | `exit.png` | 출구 | 46x46 |
 | `flip.png` | 뒤집기 타일 | 46x46 |
-| `player.png` | 플레이어 (**위를 보는** 모습, 방향은 자동 회전) | 46x46 |
+| `player.png` | 플레이어 (정면 모습, 방향은 금색 화살촉으로 따로 표시) | 46x46 |
 | `chaser.png` | 추적자 | 46x46 |
 | `dummy.png` | 허수아비 | 46x46 |
 | `bullet_fire.png` / `bullet_ice.png` / `bullet_bomb.png` | 바닥의 화염탄 / 빙결탄 / 폭발탄 | 46x46 |
@@ -16,6 +16,11 @@
 | `card_dash.png` | 2칸 앞으로 카드 | 237x330 |
 | `card_turn_left.png` / `card_turn_right.png` | 왼쪽 보기 / 오른쪽 보기 카드 | 237x330 |
 | `card_fire.png` / `card_reload.png` | 발사 / 재장전 카드 | 237x330 |
+
+### 유닛 그림 (player / chaser / dummy)
+
+`python assets/make_units.py` 로 그린 그림 (카드와 같은 갈색 가죽·금색·양피지 톤). 92x92 로 저장.
+플레이어는 돌리지 않고 그대로 그리고, 바라보는 방향은 칸 가장자리의 금색 화살촉으로 표시.
 
 ### 카드 그림 만드는 법
 

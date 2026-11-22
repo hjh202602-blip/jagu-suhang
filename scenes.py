@@ -40,15 +40,19 @@ class Scene:
 class TitleScene(Scene):
     def __init__(self):
         self.start = Button((W // 2 - 100, 420, 200, 60), "게임 시작", 24)
+        self.full = Button((W // 2 - 100, 495, 200, 45), "전체화면 (F11)", 18)
 
     def handle(self, event):
         if self.start.clicked(event):
             return "howto"
+        if self.full.clicked(event):
+            return "fullscreen"
 
     def draw(self, surf):
         label(surf, W // 2, 220, "격자 사냥", 64)
         label(surf, W // 2, 300, "마법 학교 견습생, 탄창 하나로 미궁을 탈출하라", 20)
         self.start.draw(surf)
+        self.full.draw(surf)
 
 
 # ======================================================================
@@ -66,7 +70,7 @@ class HowToScene(Scene):
         "8. 적을 모두 쓰러뜨리고 출구에 서면 클리어. 적은 턴으로 깰수록 별이 많다",
     ]
     TAN = "탄:  화염탄 피해 2  /  빙결탄 피해 1 + 적이 멈춤  /  폭발탄 피해 1 + 앞의 벽을 부숨"
-    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지"
+    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지   F11 전체화면"
 
     def __init__(self):
         self.next = Button((W // 2 - 100, 590, 200, 60), "시작하기", 24)
@@ -358,9 +362,9 @@ class PlayScene(Scene):
             rect = self.cell_rect(self.shown_pos(e))
             assets.draw_enemy(surf, rect, e.kind)
             if e.frozen > 0:
-                label(surf, rect.centerx, rect.centery - 14, "얼음", 11)
+                self.badge(surf, rect, "얼음", (190, 225, 250))
             elif e.kind == "chaser":
-                label(surf, rect.centerx, rect.centery - 14, str(e.steps), 13)
+                self.badge(surf, rect, str(e.steps), (238, 222, 186))
 
         # 플레이어
         p = board.player
@@ -390,6 +394,16 @@ class PlayScene(Scene):
             elif top == "폭발탄":
                 pygame.draw.line(surf, color, rect.topleft, rect.bottomright, 4)
                 pygame.draw.line(surf, color, rect.topright, rect.bottomleft, 4)
+
+    def badge(self, surf, rect, text, color):
+        """적 머리 위(칸 오른쪽 위) 작은 표: 이번 턴 이동 칸 수 또는 '얼음'."""
+        img = font(12).render(text, True, BLACK)
+        box_rect = img.get_rect().inflate(8, 2)
+        box_rect.width = max(box_rect.width, box_rect.height)
+        box_rect.topright = (rect.right - 1, rect.y + 1)
+        pygame.draw.rect(surf, color, box_rect, border_radius=7)
+        pygame.draw.rect(surf, (52, 34, 22), box_rect, 2, border_radius=7)
+        surf.blit(img, img.get_rect(center=box_rect.center))
 
     def draw_hud(self, surf):
         """격자 바로 아래: 스테이지, 체력, 턴, 최근 사건."""
@@ -443,7 +457,7 @@ class PauseScene(Scene):
 
     def draw(self, surf):
         label(surf, W // 2, 250, "일시정지", 40)
-        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지", 15)
+        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지 / F11 전체화면", 15)
         self.resume.draw(surf)
         self.quit.draw(surf)
 

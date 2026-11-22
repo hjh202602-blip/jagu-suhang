@@ -22,7 +22,8 @@ class Game:
 
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((W, H))
+        # SCALED: 게임 화면은 항상 W x H 로 그리고, 창/전체화면 크기에 맞춰 자동으로 늘림 (마우스 좌표도 자동 변환)
+        self.screen = pygame.display.set_mode((W, H), pygame.SCALED | pygame.RESIZABLE)
         pygame.display.set_caption("격자 사냥")
         self.clock = pygame.time.Clock()
 
@@ -75,6 +76,15 @@ class Game:
             self.scene = self.play
         elif name == "result":
             self.scene = ResultScene(self)
+        elif name == "fullscreen":      # 화면은 그대로 두고 전체화면만 켜고 끔
+            self.toggle_fullscreen()
+
+    def toggle_fullscreen(self):
+        """창 ↔ 전체화면 (F11 또는 타이틀의 전체화면 버튼)."""
+        try:
+            pygame.display.toggle_fullscreen()
+        except pygame.error:
+            pass                        # 전체화면을 지원하지 않는 환경이면 무시
 
     # ---------- 게임 루프 ----------
     def run(self):
@@ -85,6 +95,9 @@ class Game:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         return
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                        self.toggle_fullscreen()
+                        continue
                     nxt = self.scene.handle(event)
                     if nxt:
                         self.change(nxt)
