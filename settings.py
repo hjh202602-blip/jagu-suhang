@@ -45,3 +45,4 @@ STEP_DELAY = 350         # 실행 중 행동 하나 사이 간격(ms) - 플레�
 OP_SHOW_TIME = 1200      # pop(), enqueue() 같은 자료구조 연산 글자가 떠 있는 시간(ms)
 MOVE_SPEED = 0.012       # 이동 애니메이션 속도 (칸/ms → 한 칸에 약 80ms)
 SORT_DELAY = 450         # 재장전 정렬 애니메이션 한 단계 보여주는 시간(ms)
+MUSIC_VOLUME = 0.45      # 배경음악 크기 (0~1). 효과음보다 작게

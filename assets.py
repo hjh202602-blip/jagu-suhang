@@ -17,7 +17,7 @@ import random
 
 import pygame
 
-from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE
+from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE, MUSIC_VOLUME
 from ui import box, label, font, fit_size
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
@@ -261,3 +261,35 @@ def play(name):
         _sounds[name].play()
     except (pygame.error, KeyError):
         pass
+
+
+# ======================================================================
+# 배경음악: LMMS 로 만든 반복 BGM (assets/make_bgm.py, 프로젝트 파일은 assets/music/*.mmp)
+# ======================================================================
+
+MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "music")
+MUSIC = {"title": "bgm_title.wav", "game": "bgm_game.wav"}
+_music_now = None
+
+
+def music(name):
+    """
+    배경음악 바꾸기 (무한 반복). 이미 그 곡이 나오고 있으면 그대로 둠.
+    name: 'title' / 'game' / None(끄기). 소리 장치가 없으면 조용히 넘어감.
+    """
+    global _music_now
+    if name == _music_now:
+        return
+    try:
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        if name is None:
+            pygame.mixer.music.fadeout(400)
+        else:
+            pygame.mixer.music.load(os.path.join(MUSIC_DIR, MUSIC[name]))
+            pygame.mixer.music.set_volume(MUSIC_VOLUME)
+            pygame.mixer.music.play(-1, fade_ms=600)
+        _music_now = name
+    except (pygame.error, KeyError, FileNotFoundError):
+        pass
+

@@ -56,6 +56,16 @@ python check.py     # 내가 맡은 핵심 기믹을 맞게 만들었는지 확�
 
 플레이 중 자료구조 연산이 일어나면 `pop() x6`, `enqueue(발사)`, `dequeue() → 앞으로 이동`, `push(화염탄)`, `BFS: 최단 5칸` 같은 글자가 해당 영역 옆에 잠깐 떴다 사라짐 (기획서 독창 요소 ③). 기록은 `battle.py` 의 `Battle.op()`, 그리기는 `scenes.py` 의 `PlayScene.draw_ops()`.
 
+## 배경음악
+
+LMMS 로 만든 무한 반복 BGM 2곡. 끝의 잔향을 처음에 겹쳐서 끝 → 처음이 끊김 없이 이어짐.
+| 곡 | 쓰는 화면 | 구성 |
+|---|---|---|
+| `assets/music/bgm_title.wav` (11.4초) | 타이틀·조작 설명·스테이지 선택·결과 | D 단조 84 BPM 4마디, 하프 + 패드 + 클라리넷 + 북 |
+| `assets/music/bgm_game.wav` (13.7초) | 플레이·일시정지 | A 단조 140 BPM 8마디, 류트 + 베이스 + 백파이프 + 북 |
+
+곡을 고치려면 `assets/music/*.mmp` 를 LMMS 에서 열어 수정하거나, `assets/make_bgm.py` 의 악보를 고친 뒤 `python assets/make_bgm.py` (LMMS + numpy 필요). 크기는 `settings.py` 의 `MUSIC_VOLUME`.
+
 ## 조작
 
 | 입력 | 동작 |
@@ -112,5 +122,6 @@ python check.py     # 내가 맡은 핵심 기믹을 맞게 만들었는지 확�
 |---|---|---|
 | 그래픽 (탁자·양피지·토큰·말·UI) | 직접 제작 (Pygame 도형 + 노이즈, `assets/make_theme.py`, `assets/make_units.py`, `ui.py`) | 자체 제작 |
 | 그래픽 (카드) | 표현 담당(디자이너) 직접 제작 카드 시트 `assets/images/card_sheet.png` → `assets/make_cards.py` 로 잘라 쓰고 없는 카드는 합성 | 자체 제작 |
-| 효과음 | (추가 시 기록) | |
+| 효과음 | 직접 제작 (코드로 생성, `assets.py` 의 `SOUND_SHAPES`) | 자체 제작 |
+| 배경음악 | 직접 제작 (LMMS 1.2.2, 프로젝트 `assets/music/title.mmp`, `game.mmp` → `assets/make_bgm.py` 로 렌더링·반복 처리) | 자체 제작 |
 | 생성형 AI | Claude: 기본 틀 코드 작성 보조, BFS·조작 설명·별점·연산 표시 작성 보조 (개발 담당) | 활용 내역 기록 |

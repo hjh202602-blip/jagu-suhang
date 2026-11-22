@@ -15,6 +15,7 @@ import ui
 from settings import W, H, FPS
 from stages import STAGES
 from todo import NotDone
+import assets
 from scenes import TitleScene, HowToScene, SelectScene, PlayScene, PauseScene, ResultScene, TodoScene
 
 
@@ -49,6 +50,7 @@ class Game:
 
         self.play = None        # 진행 중인 PlayScene (일시정지 후 돌아오기 위해 따로 보관)
         self.scene = TitleScene()
+        assets.music("title")
 
     # ---------- 진행 기록 (PlayScene / SelectScene 이 호출) ----------
     def start_from(self, stage_no):
@@ -90,6 +92,8 @@ class Game:
             self.scene = self.play
         elif name == "result":
             self.scene = ResultScene(self)
+        # 배경음악: 플레이·일시정지는 게임 곡, 나머지 화면은 타이틀 곡 (같은 곡이면 끊지 않고 이어짐)
+        assets.music("game" if name in ("play", "pause", "resume") else "title")
 
     def pass_key(self, key):
         """패스키 처리. 숫자면 그 방부터 새로 시작, 'clear'/'fail' 은 플레이 중일 때만."""
