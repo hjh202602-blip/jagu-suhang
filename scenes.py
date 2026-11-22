@@ -12,6 +12,8 @@
 
 격자·유닛·카드 그림은 assets.py 의 draw_... 함수를 부름 (그림 에셋은 assets.py 에서 교체)
 """
+import math
+
 import pygame
 
 import assets
@@ -25,6 +27,19 @@ from board import EXIT
 from stages import STAGE_NAMES, STAGE_DESC, STAGE_LEVEL, STAGES, stars
 
 STAR = (196, 128, 30)   # 양피지 위 별 색 (진한 금)
+SHOT_MS_PER_CELL = 45   # 탄이 한 칸 날아가는 시간(ms)
+_vignette = []
+
+
+def _hurt_vignette():
+    """화면 가장자리가 붉은 테두리 (플레이어 피격 때). 한 번 만들어 재사용."""
+    if not _vignette:
+        v = pygame.Surface((W, H), pygame.SRCALPHA)
+        for i in range(60):
+            a = int(110 * (1 - i / 60) ** 2)
+            pygame.draw.rect(v, (190, 20, 16, a), (i * 2, i * 2, W - i * 4, H - i * 4), 2)
+        _vignette.append(v)
+    return _vignette[0]
 
 
 class Scene:
@@ -251,6 +266,144 @@ class PlayScene(Scene):
         self.sort_frames = []  # 재장전 정렬 과정: 화면에 차례로 보여줄 탄창 상태들
         self.sort_timer = 0
         self.seen_reload = self.battle.magazine.reload_count
+        self.effects = []      # 진행 중인 연출 (발사 탄, 터짐, 적 맞음, 플레이어 맞음). 't' = 지난 시간(ms)
+
+    # ---------- 발사·피격 연출 ----------
+    def add_effects(self, events):
+        """Battle 이 남긴 연출 기록을 받아 시간 정보를 붙임. 적이 맞는 연출은 탄이 도착한 뒤에 시작."""
+        delay = 0
+        for f in events:
+            f = dict(f)
+            if f["kind"] == "shot":
+                dist = abs(f["end"][0] - f["start"][0]) + abs(f["end"][1] - f["start"][1])
+                f["dur"] = max(140, SHOT_MS_PER_CELL * dist)
+                f["t"] = 0
+                delay = f["dur"]
+            elif f["kind"] == "enemy_hit":
+                f["dur"], f["t"] = 520, -delay          # 음수 = 아직 탄이 날아가는 중
+            elif f["kind"] == "hurt":
+                f["dur"], f["t"] = 560, 0
+            self.effects.append(f)
+
+    def update_effects(self, dt):
+        for f in self.effects:
+            before = f["t"]
+            f["t"] += dt
+            if f["kind"] == "shot" and before < f["dur"] <= f["t"]:      # 도착 → 터짐
+                self.effects.append({"kind": "burst", "pos": f["end"], "bullet": f["bullet"],
+                                     "big": f["stop"] != "miss", "t": f["t"] - f["dur"], "dur": 380})
+        self.effects = [f for f in self.effects if f["t"] < f["dur"]]
+
+    def shot_flying(self):
+        """탄이 날아가는 중이면 True (그동안은 다음 행동을 멈춤)."""
+        return any(f["kind"] == "shot" for f in self.effects)
+
+    def cell_center(self, pos):
+        c, r = pos
+        return (GRID_X + c * CELL + CELL / 2, GRID_Y + r * CELL + CELL / 2)
+
+    def shake(self, kind, pos):
+        """맞은 유닛을 좌우로 흔드는 양 (px)."""
+        dx = 0.0
+        for f in self.effects:
+            if f["kind"] == kind and f["pos"] == pos and 0 <= f["t"] < 260:
+                k = 1 - f["t"] / 260
+                dx += math.sin(f["t"] * 0.09) * 6 * k
+        return int(dx), 0
+
+    def draw_effects(self, surf):
+        """날아가는 탄, 터짐, 맞은 적 번쩍임·숫자·사라짐, 플레이어 피격."""
+        for f in self.effects:
+            kind, t = f["kind"], f["t"]
+            if kind == "shot":
+                self.draw_shot(surf, f)
+            elif kind == "burst":
+                self.draw_burst(surf, f)
+            elif kind == "enemy_hit":
+                self.draw_enemy_hit(surf, f)
+            elif kind == "hurt":
+                self.draw_hurt(surf, f)
+
+    def draw_shot(self, surf, f):
+        """탄: 빛나는 구슬 + 꼬리. 탄 색은 탄 종류 색."""
+        color = assets.BULLET_COLOR[f["bullet"]]
+        (x0, y0), (x1, y1) = self.cell_center(f["start"]), self.cell_center(f["end"])
+        if f["stop"] != "enemy":                 # 벽·바깥이면 칸 가장자리에서 멈춤
+            x1, y1 = x1 - (x1 - x0) / max(1, abs(x1 - x0) + abs(y1 - y0)) * CELL / 2, \
+                     y1 - (y1 - y0) / max(1, abs(x1 - x0) + abs(y1 - y0)) * CELL / 2
+        k = min(1.0, f["t"] / f["dur"])
+        glow = pygame.Surface((W, H), pygame.SRCALPHA)
+        for i in range(6, 0, -1):                # 꼬리: 지나온 자리에 흐려지는 구슬
+            kk = max(0.0, k - i * 0.05)
+            x, y = x0 + (x1 - x0) * kk, y0 + (y1 - y0) * kk
+            pygame.draw.circle(glow, (*color, 26 * (7 - i)), (x, y), 9 - i)
+        x, y = x0 + (x1 - x0) * k, y0 + (y1 - y0) * k
+        pygame.draw.circle(glow, (*color, 90), (x, y), 15)
+        surf.blit(glow, (0, 0))
+        pygame.draw.circle(surf, color, (x, y), 8)
+        pygame.draw.circle(surf, CREAM, (x - 2, y - 2), 3)
+        pygame.draw.circle(surf, INK, (x, y), 8, 2)
+
+    def draw_burst(self, surf, f):
+        """도착한 자리에서 퍼지는 고리 + 파편."""
+        t, dur = max(0, f["t"]), f["dur"]
+        k = t / dur
+        cx, cy = self.cell_center(f["pos"])
+        color = assets.BULLET_COLOR[f["bullet"]]
+        big = 1.6 if f["bullet"] == "폭발탄" else 1.0
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        a = int(220 * (1 - k))
+        pygame.draw.circle(layer, (*color, a), (cx, cy), int((6 + 22 * k) * big), 4)
+        pygame.draw.circle(layer, (*CREAM, int(a * 0.8)), (cx, cy), int((4 + 10 * (1 - k)) * big))
+        for i in range(8):
+            ang = i * math.pi / 4 + 0.3
+            d = (8 + 24 * k) * big
+            pygame.draw.circle(layer, (*color, a), (cx + math.cos(ang) * d, cy + math.sin(ang) * d), max(1, int(4 * (1 - k))))
+        surf.blit(layer, (0, 0))
+
+    def draw_enemy_hit(self, surf, f):
+        """적이 맞음: 흰 번쩍임 + 빨간 피해 숫자. 쓰러졌으면 흐려지며 위로 사라짐."""
+        t = f["t"]
+        rect = self.cell_rect(f["pos"])
+        if f["killed"]:                           # 판에서는 이미 지워졌으니 여기서 그림
+            fade = 1.0 if t < 0 else max(0.0, 1 - t / 420)
+            if fade > 0:
+                ghost = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
+                assets.draw_enemy(ghost, pygame.Rect(0, 0, CELL, CELL), f["enemy_kind"])
+                ghost.set_alpha(int(255 * fade))
+                surf.blit(ghost, rect.move(self.shake("enemy_hit", f["pos"])[0], -int(max(0, t) / 25)))
+        if t < 0:
+            return
+        if t < 160:                               # 번쩍
+            flash = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
+            pygame.draw.circle(flash, (255, 250, 230, int(200 * (1 - t / 160))), (CELL // 2, CELL // 2), CELL // 2)
+            surf.blit(flash, rect)
+        rise = int(t / 18)
+        alpha = 255 if t < 300 else int(255 * (1 - (t - 300) / 220))
+        text = ui.font(22).render(f"-{f['damage']}", True, WAX)
+        outline = ui.font(22).render(f"-{f['damage']}", True, CREAM)
+        tag = pygame.Surface((text.get_width() + 4, text.get_height() + 4), pygame.SRCALPHA)
+        for ox, oy in ((0, 2), (4, 2), (2, 0), (2, 4)):
+            tag.blit(outline, (ox, oy))
+        tag.blit(text, (2, 2))
+        tag.set_alpha(max(0, alpha))
+        surf.blit(tag, tag.get_rect(center=(rect.centerx, rect.y - 4 - rise)))
+
+    def draw_hurt(self, surf, f):
+        """플레이어가 맞음: 화면 가장자리 붉은 빛 + 칸 붉은 번쩍임 + '-1'."""
+        t, dur = f["t"], f["dur"]
+        k = 1 - t / dur
+        vign = _hurt_vignette()
+        vign.set_alpha(int(230 * k))
+        surf.blit(vign, (0, 0))
+        rect = self.cell_rect(f["pos"])
+        if t < 220:
+            red = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
+            pygame.draw.circle(red, (220, 40, 30, int(170 * (1 - t / 220))), (CELL // 2, CELL // 2), CELL // 2)
+            surf.blit(red, rect)
+        text = ui.font(22).render("-1", True, (200, 30, 24))
+        text.set_alpha(int(255 * k))
+        surf.blit(text, text.get_rect(center=(rect.centerx, rect.y - 6 - int(t / 20))))
 
     def track(self, unit, trail):
         """유닛의 칸이 바뀌었으면 지나간 칸(trail)을 따라 미끄러지도록 등록."""
@@ -298,7 +451,7 @@ class PlayScene(Scene):
                 self.sort_frames.pop(0)
 
         # 실행 중이면 STEP_DELAY 마다 행동 하나씩 처리 (정렬 애니메이션 중에는 잠깐 멈춤)
-        if b.phase == "run" and not self.sort_frames:
+        if b.phase == "run" and not self.sort_frames and not self.shot_flying():
             self.timer += dt
             if self.timer >= STEP_DELAY:
                 self.timer = 0
@@ -317,9 +470,11 @@ class PlayScene(Scene):
             self.track(e, e.trail)
         self.slide(dt)
 
-        # 효과음
+        # 효과음 + 발사·피격 연출
         for name in b.take_sounds():
             assets.play(name)
+        self.add_effects(b.take_fx())
+        self.update_effects(dt)
 
         # 스테이지가 끝났으면 다음 화면으로
         if b.state == "clear":
@@ -340,6 +495,7 @@ class PlayScene(Scene):
         self.draw_info(surf)
         self.draw_queue(surf)
         self.draw_hand(surf)
+        self.draw_effects(surf)
         self.draw_ops(surf)
         self.draw_drag(surf)
 
@@ -464,7 +620,7 @@ class PlayScene(Scene):
 
         # 적 + 머리 위 정보(이번 턴 이동 칸 수, 얼어 있으면 '얼음')
         for e in board.enemies:
-            rect = self.cell_rect(self.shown_pos(e))
+            rect = self.cell_rect(self.shown_pos(e)).move(self.shake("enemy_hit", e.pos))
             assets.draw_enemy(surf, rect, e.kind)
             if e.frozen > 0:
                 self.badge(surf, rect, "얼음", (190, 225, 250))
@@ -473,7 +629,7 @@ class PlayScene(Scene):
 
         # 플레이어
         p = board.player
-        assets.draw_player(surf, self.cell_rect(self.shown_pos(p)), p.facing)
+        assets.draw_player(surf, self.cell_rect(self.shown_pos(p)).move(self.shake("hurt", p.pos)), p.facing)
 
     def draw_range(self, surf):
         """

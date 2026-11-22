@@ -46,6 +46,7 @@ class Battle:
         self.message = ""                   # 화면에 보여줄 최근 사건 한 줄
         self.ops = []                       # 아직 화면에 안 넘긴 자료구조 연산 기록 (where, 글자)
         self.sounds = []                    # 아직 화면에 안 넘긴 효과음 이름
+        self.fx = []                        # 아직 화면에 안 넘긴 연출 (발사, 명중, 피격)
         self.start_turn()
 
     # ================= 자료구조 연산 기록 =================
@@ -69,6 +70,19 @@ class Battle:
     def take_sounds(self):
         sounds, self.sounds = self.sounds, []
         return sounds
+
+    def effect(self, kind, **info):
+        """
+        화면 연출이 필요하다고 기록. 화면(scenes.py)이 take_fx() 로 가져가서 그림.
+          shot      : 탄이 날아감 (start, end, bullet, stop = 'enemy'/'wall'/'miss')
+          enemy_hit : 적이 맞음 (pos, damage, killed, enemy_kind)
+          hurt      : 플레이어가 맞음 (pos)
+        """
+        self.fx.append(dict(kind=kind, **info))
+
+    def take_fx(self):
+        fx, self.fx = self.fx, []
+        return fx
 
     # ================= 턴 관리 =================
     def start_turn(self):
@@ -212,6 +226,7 @@ class Battle:
             p.hp -= 1
             self.message = "적과 부딪혔다! 체력 -1, 기절"
             self.sound("hurt")
+            self.effect("hurt", pos=p.pos)
             # 피격: 다음 행동(큐 맨 앞)을 버리고 맨 뒤에 '기절' 넣기
             lost = self.queue.dequeue()
             if lost is not None:
@@ -289,8 +304,10 @@ class Battle:
             pos = (pos[0] + dx, pos[1] + dy)
             if not board.in_bounds(pos):
                 self.message = f"{bullet} 빗나감"
+                self.effect("shot", start=p.pos, end=pos, bullet=bullet, stop="miss")
                 return
             if board.is_wall(pos):
+                self.effect("shot", start=p.pos, end=pos, bullet=bullet, stop="wall")
                 if bullet == "폭발탄":
                     board.set_tile(pos, FLOOR)
                     self.message = "폭발탄이 벽을 부쉈다"
@@ -301,6 +318,9 @@ class Battle:
             if enemy:
                 enemy.hp -= DAMAGE[bullet]
                 self.sound("hit")
+                self.effect("shot", start=p.pos, end=pos, bullet=bullet, stop="enemy")
+                self.effect("enemy_hit", pos=pos, damage=DAMAGE[bullet], killed=enemy.hp <= 0,
+                            enemy_kind=enemy.kind, bullet=bullet)
                 if bullet == "빙결탄":
                     enemy.frozen = FREEZE_TURNS
                 board.remove_dead()
@@ -332,6 +352,7 @@ class Battle:
                     p.hp -= 1
                     self.message = "적에게 공격당했다! 체력 -1"
                     self.sound("hurt")
+                    self.effect("hurt", pos=p.pos)
                     break
                 e.pos = nxt
                 e.trail.append(nxt)
