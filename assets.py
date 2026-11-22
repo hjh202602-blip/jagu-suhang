@@ -18,7 +18,7 @@ import random
 import pygame
 
 from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE
-from ui import box, label
+from ui import box, label, font
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
 
@@ -36,8 +36,9 @@ IMAGE_FILES = {
     "화염탄": "bullet_fire.png",
     "빙결탄": "bullet_ice.png",
     "폭발탄": "bullet_bomb.png",
-    # 카드 (카드 크기 100x115)
+    # 카드: card_sheet.png 에서 assets/make_cards.py 로 잘라 만든 그림 (비율 유지해서 그림)
     "앞으로 이동": "card_forward.png",
+    "2칸 앞으로": "card_dash.png",
     "뒤로 이동": "card_back.png",
     "왼쪽 보기": "card_turn_left.png",
     "오른쪽 보기": "card_turn_right.png",
@@ -49,21 +50,32 @@ _cache = {}  # (이름, 크기) → 불러온 그림. 없는 파일은 None 으�
 
 
 def image(name, size):
-    """assets/images 에서 그림을 불러와 size 로 맞춰 반환. 파일이 없으면 None."""
+    """assets/images 에서 그림을 불러와 size 로 맞춰 반환 (size=None 이면 원래 크기). 파일이 없으면 None."""
     key = (name, size)
     if key not in _cache:
         path = os.path.join(IMAGE_DIR, IMAGE_FILES.get(name, ""))
         if name in IMAGE_FILES and os.path.isfile(path):
             img = pygame.image.load(path).convert_alpha()
-            _cache[key] = pygame.transform.smoothscale(img, size)
+            _cache[key] = pygame.transform.smoothscale(img, size) if size else img
         else:
             _cache[key] = None
     return _cache[key]
 
 
-def _blit(surf, name, rect, angle=0):
-    """그림 파일이 있으면 rect 에 그리고 True, 없으면 False (→ 임시 그림을 그림)."""
-    img = image(name, rect.size)
+def _blit(surf, name, rect, angle=0, keep_ratio=False):
+    """
+    그림 파일이 있으면 rect 에 그리고 True, 없으면 False (→ 기본 그림을 그림).
+    keep_ratio: 그림 원래 비율을 유지한 채 rect 안에 맞춤 (카드처럼 길쭉한 그림)
+    """
+    size = rect.size
+    if keep_ratio:
+        raw = image(name, None)
+        if raw is None:
+            return False
+        w, h = raw.get_size()
+        k = min(rect.w / w, rect.h / h)
+        size = (int(w * k), int(h * k))
+    img = image(name, size)
     if img is None:
         return False
     if angle:
@@ -154,7 +166,15 @@ def draw_player(surf, rect, facing):
 
 def draw_card(surf, rect, name):
     """카드 한 장 (손패). name: 카드 이름."""
-    if not _blit(surf, name, rect):
+    if _blit(surf, name, rect, keep_ratio=True):
+        # 카드 그림의 영어 이름 띠 위에 한글 이름을 덮어 씀 (띠 위치: 카드 높이의 84%~95%)
+        w = int(rect.h * 79 / 110)
+        strip = pygame.Rect(0, 0, int(w * 0.84), int(rect.h * 0.11))
+        strip.center = (rect.centerx, rect.y + int(rect.h * 0.895))
+        pygame.draw.rect(surf, (207, 182, 144), strip)
+        img = font(12).render(name, True, (62, 40, 24))
+        surf.blit(img, img.get_rect(center=strip.center))
+    else:
         pygame.draw.rect(surf, WHITE, rect)
         box(surf, rect, 2)
         label(surf, rect.centerx, rect.y + 40, CARD_ICONS.get(name, ""), 30)

@@ -12,9 +12,18 @@
 | `chaser.png` | 추적자 | 46x46 |
 | `dummy.png` | 허수아비 | 46x46 |
 | `bullet_fire.png` / `bullet_ice.png` / `bullet_bomb.png` | 바닥의 화염탄 / 빙결탄 / 폭발탄 | 46x46 |
-| `card_forward.png` / `card_back.png` | 앞으로 이동 / 뒤로 이동 카드 | 100x115 |
-| `card_turn_left.png` / `card_turn_right.png` | 왼쪽 보기 / 오른쪽 보기 카드 | 100x115 |
-| `card_fire.png` / `card_reload.png` | 발사 / 재장전 카드 | 100x115 |
+| `card_forward.png` / `card_back.png` | 앞으로 이동 / 뒤로 이동 카드 | 237x330 |
+| `card_dash.png` | 2칸 앞으로 카드 | 237x330 |
+| `card_turn_left.png` / `card_turn_right.png` | 왼쪽 보기 / 오른쪽 보기 카드 | 237x330 |
+| `card_fire.png` / `card_reload.png` | 발사 / 재장전 카드 | 237x330 |
+
+### 카드 그림 만드는 법
+
+카드는 `card_sheet.png` (카드 9칸 시트)에서 잘라 씀. 시트를 바꾸면 `python assets/make_cards.py` 로 다시 만들기.
+- 시트에 있는 카드: ADVANCE, RETREAT, FIRE, RELOAD 는 그대로 자름
+- 시트에 없는 카드는 빈 카드 틀로 만듦: TURN 그림 + 금색 화살촉 → 왼쪽/오른쪽 보기, ADVANCE 장화 2개(잔상) → 2칸 앞으로
+- `card_slash_left.png` 는 지금 게임에 없는 카드 (기획서의 '왼쪽 공격'용으로 보관), `card_blank.png` 는 빈 틀
+- 게임에서는 카드 아래 영어 이름 띠 위에 한글 이름을 덮어 씀 (assets.py 의 draw_card)
 
 크기가 달라도 자동으로 맞춰지지만, 위 크기로 그리면 가장 깔끔함.
 직접 만든 그림이 아니면 출처를 README 의 리소스 표에 적을 것 (기획서 9번).
