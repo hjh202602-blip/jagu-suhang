@@ -99,6 +99,6 @@ python check.py     # 내가 맡은 핵심 기믹을 맞게 만들었는지 확�
 | 종류 | 출처 | 라이선스 |
 |---|---|---|
 | 그래픽 (격자·유닛) | 직접 제작 (Pygame 도형) | - |
-| 그래픽 (카드) | `assets/images/card_sheet.png` 카드 시트 (출처 기록 필요) → `assets/make_cards.py` 로 잘라 쓰고 없는 카드는 합성 | 출처·라이선스 기록 필요 |
+| 그래픽 (카드) | 표현 담당(디자이너) 직접 제작 카드 시트 `assets/images/card_sheet.png` → `assets/make_cards.py` 로 잘라 쓰고 없는 카드는 합성 | 자체 제작 |
 | 효과음 | (추가 시 기록) | |
 | 생성형 AI | Claude: 기본 틀 코드 작성 보조, BFS·조작 설명·별점·연산 표시 작성 보조 (개발 담당) | 활용 내역 기록 |
