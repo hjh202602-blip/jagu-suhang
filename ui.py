@@ -14,16 +14,23 @@ from settings import (W, H, FONT_NAME, INK, INK_LIGHT, PARCHMENT, CREAM, GOLD, W
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
 SERIF = "notoserifkr,batang,applemyungjo,nanummyeongjo"   # 제목용 명조체
+BIG_SERIF = 30          # 이 크기 이상의 제목만 명조체
+MIN_SIZE = 10           # 글자를 줄여서 맞출 때 최소 크기
 
 _fonts = {}    # (크기, 명조, 굵게) → 폰트 (매 프레임 새로 만들지 않도록)
 _images = {}   # 파일 이름 → 그림
 _cache = {}    # 패널·버튼처럼 크기별로 한 번 만들어 두는 그림
 
 
-def font(size, serif=False, bold=False):
-    key = (size, serif, bold)
+def font(size, serif=False, bold=True):
+    """
+    글자 모양. 작은 글자가 뭉개지지 않도록 전부 굵은 맑은 고딕을 쓰고,
+    명조체는 큰 제목(BIG_SERIF 이상)에만 씀. bold 는 예전 코드와 맞추려고 남겨 둔 매개변수.
+    """
+    serif = serif and size >= BIG_SERIF
+    key = (size, serif)
     if key not in _fonts:
-        _fonts[key] = pygame.font.SysFont(SERIF if serif else FONT_NAME, size, bold=bold)
+        _fonts[key] = pygame.font.SysFont(SERIF if serif else FONT_NAME, size, bold=True)
     return _fonts[key]
 
 
@@ -38,10 +45,38 @@ def _image(name):
 # ======================================================================
 # 글자
 # ======================================================================
-def label(surf, x, y, text, size=20, color=INK, serif=False, bold=False):
-    """(x, y) 를 중심으로 글자 쓰기. 기본은 양피지 위 잉크색."""
-    img = font(size, serif, bold).render(text, True, color)
-    surf.blit(img, img.get_rect(center=(x, y)))
+def label(surf, x, y, text, size=20, color=INK, serif=False, bold=True, width=None, max_lines=None,
+          align="center"):
+    """
+    글자 쓰기. (x, y) = 글자 덩어리의 가운데 (align="left" 면 x 는 왼쪽 끝).
+    width 를 주면 그 폭 안에서 다음 줄로 넘기고, max_lines 보다 줄이 많으면 글자를 줄여서 맞춤.
+    """
+    if width is None:
+        img = font(size, serif).render(text, True, color)
+        rect = img.get_rect(midleft=(x, y)) if align == "left" else img.get_rect(center=(x, y))
+        surf.blit(img, rect)
+        return
+    while True:
+        lines = wrap(text, size, width, serif)
+        if max_lines is None or len(lines) <= max_lines or size <= MIN_SIZE:
+            break
+        size -= 1
+    if max_lines is not None:
+        lines = lines[:max_lines]
+    gap = int(size * 1.3)
+    top = y - gap * (len(lines) - 1) / 2
+    for k, line in enumerate(lines):
+        img = font(size, serif).render(line, True, color)
+        cy = int(top + k * gap)
+        rect = img.get_rect(midleft=(x, cy)) if align == "left" else img.get_rect(center=(x, cy))
+        surf.blit(img, rect)
+
+
+def fit_size(text, size, width, serif=False):
+    """한 줄로 width 안에 들어가는 가장 큰 글자 크기 (MIN_SIZE 까지 줄임)."""
+    while size > MIN_SIZE and font(size, serif).size(text)[0] > width:
+        size -= 1
+    return size
 
 
 def title(surf, x, y, text, size=40, color=GOLD, outline=INK):
@@ -54,19 +89,32 @@ def title(surf, x, y, text, size=40, color=GOLD, outline=INK):
     surf.blit(f.render(text, True, color), rect)
 
 
-def wrap(text, size, width):
-    """글자를 width 안에 들어가게 여러 줄로 나눔."""
-    f = font(size)
+def wrap(text, size, width, serif=False):
+    """
+    글자를 width 안에 들어가게 여러 줄로 나눔. 줄바꿈 문자는 그 자리에서 줄바꿈,
+    띄어쓰기 단위로 끊고, 한 단어가 너무 길면 글자 단위로.
+    """
+    if "\n" in text:
+        return [line for part in text.split("\n") for line in wrap(part, size, width, serif)]
+    f = font(size, serif)
     lines, line = [], ""
-    for ch in text:
-        if f.size(line + ch)[0] > width and line:
+    for word in text.split(" "):
+        cand = (line + " " + word) if line else word
+        if f.size(cand)[0] <= width:
+            line = cand
+            continue
+        if line:
             lines.append(line)
-            line = ch.lstrip()
-        else:
-            line += ch
+        line = ""
+        for ch in word:                       # 단어 자체가 폭보다 길면 글자 단위로 자름
+            if f.size(line + ch)[0] > width and line:
+                lines.append(line)
+                line = ch
+            else:
+                line += ch
     if line:
         lines.append(line)
-    return lines
+    return lines or [""]
 
 
 # ======================================================================
@@ -135,7 +183,7 @@ def panel(surf, rect, title_text=None, radius=10):
     pygame.draw.rect(surf, (*INK,), rect, 2, border_radius=radius)
     pygame.draw.rect(surf, INK_LIGHT, rect.inflate(-10, -10), 1, border_radius=max(0, radius - 4))
     if title_text:
-        label(surf, rect.centerx, rect.y + 24, title_text, 19, serif=True, bold=True)
+        label(surf, rect.centerx, rect.y + 24, title_text, 19, width=rect.w - 24, max_lines=1)
         pygame.draw.line(surf, INK_LIGHT, (rect.x + 24, rect.y + 42), (rect.right - 24, rect.y + 42), 1)
 
 
@@ -200,7 +248,7 @@ def seal(surf, center, text, radius=14):
         _cache[key] = s
     img = _cache[key]
     surf.blit(img, img.get_rect(center=center))
-    label(surf, center[0], center[1], text, max(11, radius - 2), CREAM, serif=True, bold=True)
+    label(surf, center[0], center[1], text, max(11, radius - 2), CREAM)
 
 
 def stars_text(n, total=3):
@@ -251,8 +299,9 @@ class Button:
         surf.blit(_shadow(self.rect.size, 10), (self.rect.x - 20 + 3, self.rect.y - 20 + 5))
         surf.blit(_plaque(self.rect.size, hover), self.rect)
         cx, cy = self.rect.center
-        label(surf, cx + 1, cy + 2, self.text, self.size, (30, 16, 8), serif=True, bold=True)
-        label(surf, cx, cy, self.text, self.size, GOLD if hover else CREAM, serif=True, bold=True)
+        size = fit_size(self.text, self.size, self.rect.w - 24)         # 명판 안에 들어가게
+        label(surf, cx + 1, cy + 2, self.text, size, (30, 16, 8))
+        label(surf, cx, cy, self.text, size, GOLD if hover else CREAM)
 
     def clicked(self, event):
         """이 이벤트가 버튼 위에서 왼쪽 클릭이면 True."""

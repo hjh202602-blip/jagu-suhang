@@ -18,7 +18,7 @@ import random
 import pygame
 
 from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE
-from ui import box, label, font
+from ui import box, label, font, fit_size
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
 
@@ -172,13 +172,14 @@ def draw_card(surf, rect, name):
         strip = pygame.Rect(0, 0, int(w * 0.84), int(rect.h * 0.11))
         strip.center = (rect.centerx, rect.y + int(rect.h * 0.895))
         pygame.draw.rect(surf, (207, 182, 144), strip)
-        img = font(12).render(name, True, (62, 40, 24))
+        size = fit_size(name, 13, strip.w - 6)                      # 띠 안에 들어가게 줄임
+        img = font(size).render(name, True, (62, 40, 24))
         surf.blit(img, img.get_rect(center=strip.center))
     else:
         pygame.draw.rect(surf, WHITE, rect)
         box(surf, rect, 2)
         label(surf, rect.centerx, rect.y + 40, CARD_ICONS.get(name, ""), 30)
-        label(surf, rect.centerx, rect.bottom - 25, name, 14)
+        label(surf, rect.centerx, rect.bottom - 25, name, 14, width=rect.w - 10, max_lines=2)
 
 
 def draw_card_rotated(surf, name, center, angle, scale=1.0):
