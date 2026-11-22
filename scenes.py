@@ -40,19 +40,15 @@ class Scene:
 class TitleScene(Scene):
     def __init__(self):
         self.start = Button((W // 2 - 100, 420, 200, 60), "게임 시작", 24)
-        self.full = Button((W // 2 - 100, 495, 200, 45), "전체화면 (F11)", 18)
 
     def handle(self, event):
         if self.start.clicked(event):
             return "howto"
-        if self.full.clicked(event):
-            return "fullscreen"
 
     def draw(self, surf):
         label(surf, W // 2, 220, "격자 사냥", 64)
         label(surf, W // 2, 300, "마법 학교 견습생, 탄창 하나로 미궁을 탈출하라", 20)
         self.start.draw(surf)
-        self.full.draw(surf)
 
 
 # ======================================================================
@@ -70,7 +66,7 @@ class HowToScene(Scene):
         "8. 적을 모두 쓰러뜨리고 출구에 서면 클리어. 적은 턴으로 깰수록 별이 많다",
     ]
     TAN = "탄:  화염탄 피해 2  /  빙결탄 피해 1 + 적이 멈춤  /  폭발탄 피해 1 + 앞의 벽을 부숨"
-    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지   F11 전체화면"
+    KEYS = "Enter 실행   R 방 다시 시작   ESC 일시정지"
 
     def __init__(self):
         self.next = Button((W // 2 - 100, 590, 200, 60), "시작하기", 24)
@@ -457,7 +453,7 @@ class PauseScene(Scene):
 
     def draw(self, surf):
         label(surf, W // 2, 250, "일시정지", 40)
-        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지 / F11 전체화면", 15)
+        label(surf, W // 2, 290, "조작: 카드 끌어 놓기 / Enter 실행 / R 다시 시작 / ESC 일시정지", 15)
         self.resume.draw(surf)
         self.quit.draw(surf)
 

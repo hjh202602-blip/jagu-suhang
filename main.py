@@ -17,6 +17,19 @@ from todo import NotDone
 from scenes import TitleScene, HowToScene, SelectScene, PlayScene, PauseScene, ResultScene, TodoScene
 
 
+# 패스키 (시연·테스트용): 누르면 바로 그 화면으로 감. 화면에는 안내하지 않음
+PASS_KEYS = {
+    pygame.K_F1: "title",       # 타이틀
+    pygame.K_F2: "howto",       # 조작 설명
+    pygame.K_F3: "select",      # 스테이지 선택
+    pygame.K_F4: 1,             # 1번 방 바로 시작
+    pygame.K_F5: 2,             # 2번 방 바로 시작
+    pygame.K_F6: 3,             # 3번 방 바로 시작
+    pygame.K_F7: "clear",       # 지금 방 바로 클리어 → 다음 방 (3번 방이면 결과 화면)
+    pygame.K_F8: "fail",        # 지금 방 바로 실패 → 결과 화면
+}
+
+
 class Game:
     """현재 화면과 진행 기록(몇 스테이지인지, 스테이지별 턴 수)을 들고 있음."""
 
@@ -76,11 +89,29 @@ class Game:
             self.scene = self.play
         elif name == "result":
             self.scene = ResultScene(self)
-        elif name == "fullscreen":      # 화면은 그대로 두고 전체화면만 켜고 끔
-            self.toggle_fullscreen()
+
+    def pass_key(self, key):
+        """패스키 처리. 숫자면 그 방부터 새로 시작, 'clear'/'fail' 은 플레이 중일 때만."""
+        target = PASS_KEYS[key]
+        if isinstance(target, int):
+            self.start_from(target)
+            self.change("play")
+        elif target in ("clear", "fail"):
+            if self.scene is not self.play or self.play is None:
+                return
+            b = self.play.battle
+            if target == "clear":
+                b.board.enemies = []
+                b.state = "clear"
+            else:
+                b.board.player.hp = 0
+                b.state = "fail"
+            # 다음 update() 에서 PlayScene 이 클리어/실패를 처리해 다음 화면으로 넘어감
+        else:
+            self.change(target)
 
     def toggle_fullscreen(self):
-        """창 ↔ 전체화면 (F11 또는 타이틀의 전체화면 버튼)."""
+        """창 ↔ 전체화면 (F11)."""
         try:
             pygame.display.toggle_fullscreen()
         except pygame.error:
@@ -97,6 +128,9 @@ class Game:
                         return
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                         self.toggle_fullscreen()
+                        continue
+                    if event.type == pygame.KEYDOWN and event.key in PASS_KEYS:
+                        self.pass_key(event.key)
                         continue
                     nxt = self.scene.handle(event)
                     if nxt:
