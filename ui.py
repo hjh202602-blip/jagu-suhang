@@ -10,11 +10,11 @@ import os
 import pygame
 
 from settings import (W, H, FONT_NAME, INK, INK_LIGHT, PARCHMENT, CREAM, GOLD, WAX,
-                      BOARD_RECT)
+                      BOARD_RECT, ARCANE, ARCANE_LIGHT)
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
 SERIF = "notoserifkr,batang,applemyungjo,nanummyeongjo"   # 제목용 명조체
-BIG_SERIF = 30          # 이 크기 이상의 제목만 명조체
+BIG_SERIF = 999         # 명조체는 붓글씨처럼 보여서 쓰지 않음 (제목도 굵은 고딕 + 금빛·보랏빛)
 MIN_SIZE = 10           # 글자를 줄여서 맞출 때 최소 크기
 
 _fonts = {}    # (크기, 명조, 굵게) → 폰트 (매 프레임 새로 만들지 않도록)
@@ -100,14 +100,31 @@ def fit_size(text, size, width, serif=False):
     return size
 
 
-def title(surf, x, y, text, size=40, color=GOLD, outline=INK):
-    """테두리 있는 큰 제목 (나무 위에서도 잘 보이게)."""
-    f = font(size, serif=True, bold=True)
-    base = f.render(text, True, outline)
-    rect = base.get_rect(center=(x, y))
-    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (2, 2), (2, -2), (-2, 2), (1, 3)):
-        surf.blit(base, rect.move(dx, dy))
-    surf.blit(f.render(text, True, color), rect)
+def glow_text(img, color, radius=6, strength=170):
+    """글자 모양을 흐리게 번지게 한 빛 (마법 빛남)."""
+    w, h = img.get_size()
+    pad = radius * 2
+    base = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+    tint = img.copy()
+    tint.fill((*color, 255), special_flags=pygame.BLEND_RGBA_MIN)
+    base.blit(tint, (pad, pad))
+    small = pygame.transform.smoothscale(base, (max(1, base.get_width() // radius), max(1, base.get_height() // radius)))
+    glow = pygame.transform.smoothscale(small, base.get_size())
+    glow.set_alpha(strength)
+    return glow, pad
+
+
+def title(surf, x, y, text, size=40, color=GOLD, outline=INK, glow=ARCANE, deco_font=False):
+    """빛나는 큰 제목: 보랏빛 번짐 + 진한 테두리 + 금색 글자. deco_font=True 면 영어 장식 글꼴."""
+    f = (lambda s: deco(s)) if deco_font else (lambda s: font(s))
+    img = f(size).render(text, True, color)
+    rect = img.get_rect(center=(x, y))
+    g, pad = glow_text(img, glow, max(4, size // 6))
+    surf.blit(g, (rect.x - pad, rect.y - pad))
+    edge = f(size).render(text, True, outline)
+    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (1, 3)):
+        surf.blit(edge, rect.move(dx, dy))
+    surf.blit(img, rect)
 
 
 def wrap(text, size, width, serif=False):
@@ -142,12 +159,46 @@ def wrap(text, size, width, serif=False):
 # 배경 · 양피지
 # ======================================================================
 def background(surf):
-    """화면 전체 나무 탁자."""
+    """화면 전체: 마법진이 새겨진 나무 탁자 + 떠다니는 마력 불빛."""
     bg = _image("bg_table.png")
     if bg:
         surf.blit(bg, (0, 0))
     else:
         surf.fill((70, 44, 26))
+    sparkles(surf)
+
+
+_motes = []
+
+
+def sparkles(surf):
+    """천천히 위로 떠오르며 깜빡이는 작은 마력 불빛 (보라·하늘·금). 시간에 따라 움직임."""
+    if not _motes:
+        import random
+        rng = random.Random(11)
+        for _ in range(46):
+            _motes.append((rng.uniform(0, W), rng.uniform(0, H), rng.uniform(8, 26), rng.uniform(0, 6.28),
+                           rng.choice([ARCANE_LIGHT, (150, 210, 255), GOLD]), rng.uniform(1.5, 3.2)))
+    t = pygame.time.get_ticks() / 1000
+    key = ("mote", 0)
+    if key not in _cache:
+        dot = pygame.Surface((24, 24), pygame.SRCALPHA)
+        for r in range(12, 0, -1):
+            pygame.draw.circle(dot, (255, 255, 255, int(90 * (1 - r / 12) ** 1.5)), (12, 12), r)
+        _cache[key] = dot
+    for x0, y0, speed, phase, color, size in _motes:
+        y = (y0 - t * speed) % (H + 40) - 20
+        x = x0 + math.sin(t * 0.6 + phase) * 14
+        twinkle = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(t * 2.2 + phase * 3))
+        ck = ("mote", color)
+        if ck not in _cache:
+            d = _cache[key].copy()
+            d.fill((*color, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            _cache[ck] = d
+        d = _cache[ck]
+        d.set_alpha(int(255 * twinkle))
+        surf.blit(d, (x - 12, y - 12))
+        pygame.draw.circle(surf, color, (x, y), max(1, int(size * twinkle * 0.6)))
 
 
 def board(surf):
@@ -239,37 +290,54 @@ def mat(surf, rect):
 
 
 def scroll(surf, rect):
-    """위아래에 나무 막대가 달린 두루마리 양피지."""
+    """마법서 한 장: 보랏빛 마력이 번지는 양피지 + 금색 모서리 장식 + 위쪽 가운데 보석."""
     rect = pygame.Rect(rect)
-    panel(surf, rect, radius=4)
-    for y in (rect.y - 8, rect.bottom - 10):
-        rod = pygame.Rect(rect.x - 18, y, rect.w + 36, 18)
-        pygame.draw.rect(surf, (98, 58, 30), rod, border_radius=9)
-        pygame.draw.line(surf, (150, 100, 58), (rod.x + 10, rod.y + 5), (rod.right - 10, rod.y + 5), 3)
-        pygame.draw.rect(surf, INK, rod, 2, border_radius=9)
-        for x in (rod.x - 4, rod.right - 10):                         # 막대 끝 손잡이
-            pygame.draw.circle(surf, GOLD, (x + 7, rod.centery), 10)
-            pygame.draw.circle(surf, INK, (x + 7, rod.centery), 10, 2)
+    key = ("aura", rect.size)
+    if key not in _cache:
+        a = pygame.Surface((rect.w + 80, rect.h + 80), pygame.SRCALPHA)
+        pygame.draw.rect(a, (*ARCANE, 150), (40, 40, rect.w, rect.h), border_radius=18)
+        small = pygame.transform.smoothscale(a, (max(1, a.get_width() // 14), max(1, a.get_height() // 14)))
+        _cache[key] = pygame.transform.smoothscale(small, a.get_size())
+    surf.blit(_cache[key], (rect.x - 40, rect.y - 40))
+    panel(surf, rect, radius=8)
+    pygame.draw.rect(surf, GOLD, rect.inflate(-14, -14), 2, border_radius=6)
+    for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):           # 모서리 금장식 (꺾쇠 + 작은 원)
+        cx = rect.x + 7 if sx > 0 else rect.right - 8
+        cy = rect.y + 7 if sy > 0 else rect.bottom - 8
+        pygame.draw.lines(surf, GOLD, False, [(cx, cy + sy * 46), (cx, cy), (cx + sx * 46, cy)], 5)
+        pygame.draw.lines(surf, INK, False, [(cx, cy + sy * 46), (cx, cy), (cx + sx * 46, cy)], 1)
+        pygame.draw.circle(surf, GOLD, (cx + sx * 14, cy + sy * 14), 6)
+        pygame.draw.circle(surf, ARCANE, (cx + sx * 14, cy + sy * 14), 3)
+    gem(surf, (rect.centerx, rect.y + 7), 11)
+
+
+def gem(surf, center, r):
+    """마름모 보석 (보라) + 금 테."""
+    cx, cy = center
+    pts = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+    pygame.draw.polygon(surf, GOLD, [(cx, cy - r - 4), (cx + r + 4, cy), (cx, cy + r + 4), (cx - r - 4, cy)])
+    pygame.draw.polygon(surf, ARCANE, pts)
+    pygame.draw.polygon(surf, ARCANE_LIGHT, [(cx, cy - r), (cx + r // 2, cy - r // 3), (cx - r // 2, cy - r // 3)])
+    pygame.draw.polygon(surf, INK, [(cx, cy - r - 4), (cx + r + 4, cy), (cx, cy + r + 4), (cx - r - 4, cy)], 2)
 
 
 def seal(surf, center, text, radius=14):
-    """봉랍 도장 (빨간 밀랍 + 글자). 행동 큐 순서 번호 등."""
-    key = ("seal", radius)
+    """룬 돌: 보랏빛으로 빛나는 짙은 원판 + 금 테 + 번호 (행동 큐 순서 등)."""
+    key = ("rune", radius)
     if key not in _cache:
-        s = pygame.Surface((radius * 2 + 4, radius * 2 + 4), pygame.SRCALPHA)
-        c = radius + 2
-        pts = []
-        for i in range(18):                                          # 울퉁불퉁한 가장자리
-            a = i * math.pi / 9
-            r = radius + (2 if i % 2 else -1)
-            pts.append((c + r * math.cos(a), c + r * math.sin(a)))
-        pygame.draw.polygon(s, WAX, pts)
-        pygame.draw.circle(s, (178, 52, 44), (c, c), radius - 4)
-        pygame.draw.circle(s, (110, 20, 18), (c, c), radius - 4, 2)
+        size = radius * 2 + 16
+        s = pygame.Surface((size, size), pygame.SRCALPHA)
+        c = size // 2
+        for r in range(radius + 8, radius, -1):                 # 바깥 빛
+            pygame.draw.circle(s, (*ARCANE, int(70 * (1 - (r - radius) / 8))), (c, c), r)
+        pygame.draw.circle(s, (46, 30, 70), (c, c), radius)
+        pygame.draw.circle(s, (78, 54, 120), (c - radius // 4, c - radius // 4), radius // 2)
+        pygame.draw.circle(s, GOLD, (c, c), radius, 2)
+        pygame.draw.circle(s, ARCANE_LIGHT, (c, c), radius - 4, 1)
         _cache[key] = s
     img = _cache[key]
     surf.blit(img, img.get_rect(center=center))
-    label(surf, center[0], center[1], text, max(11, radius - 2), CREAM)
+    deco_label(surf, center[0], center[1] + 1, text, max(10, radius), ARCANE_LIGHT)
 
 
 def stars_text(n, total=3):
@@ -301,8 +369,9 @@ def _plaque(size, hover):
         s.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         pygame.draw.rect(s, (40, 24, 12), (0, 0, w, h), 3, border_radius=10)
         pygame.draw.rect(s, GOLD if hover else (196, 150, 70), (5, 5, w - 10, h - 10), 2, border_radius=7)
-        for x, y in ((10, 10), (w - 11, 10), (10, h - 11), (w - 11, h - 11)):   # 모서리 금 못
-            pygame.draw.circle(s, GOLD, (x, y), 3)
+        for x, y in ((10, 10), (w - 11, 10), (10, h - 11), (w - 11, h - 11)):   # 모서리 보랏빛 보석 못
+            pygame.draw.circle(s, GOLD, (x, y), 4)
+            pygame.draw.circle(s, ARCANE_LIGHT if hover else ARCANE, (x, y), 2)
         _cache[key] = s
     return _cache[key]
 
@@ -318,6 +387,14 @@ class Button:
     def draw(self, surf):
         hover = self.rect.collidepoint(pygame.mouse.get_pos())
         surf.blit(_shadow(self.rect.size, 10), (self.rect.x - 20 + 3, self.rect.y - 20 + 5))
+        if hover:                                                   # 마우스를 올리면 보랏빛 마력이 번짐
+            key = ("btnglow", self.rect.size)
+            if key not in _cache:
+                gsurf = pygame.Surface((self.rect.w + 40, self.rect.h + 40), pygame.SRCALPHA)
+                pygame.draw.rect(gsurf, (*ARCANE, 200), (20, 20, *self.rect.size), border_radius=12)
+                small = pygame.transform.smoothscale(gsurf, (max(1, gsurf.get_width() // 8), max(1, gsurf.get_height() // 8)))
+                _cache[key] = pygame.transform.smoothscale(small, gsurf.get_size())
+            surf.blit(_cache[key], (self.rect.x - 20, self.rect.y - 20))
         surf.blit(_plaque(self.rect.size, hover), self.rect)
         cx, cy = self.rect.center
         size = fit_size(self.text, self.size, self.rect.w - 24)         # 명판 안에 들어가게

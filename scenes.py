@@ -79,11 +79,12 @@ class TitleScene(Scene):
             assets.draw_item(surf, pygame.Rect(930 + k * 54, 600, 56, 56), b)
 
         ui.scroll(surf, (W // 2 - 290, 96, 580, 320))
-        label(surf, W // 2, 150, "마법 학교 졸업 시험", 18, INK_LIGHT, width=500, max_lines=1)
-        label(surf, W // 2, 228, "격자 사냥", 76, INK, serif=True, width=500, max_lines=1)
-        pygame.draw.line(surf, INK_LIGHT, (W // 2 - 180, 290), (W // 2 + 180, 290), 2)
-        pygame.draw.polygon(surf, INK, [(W // 2, 282), (W // 2 + 8, 290), (W // 2, 298), (W // 2 - 8, 290)])
-        label(surf, W // 2, 343, "카드로 행동을 짜고, 탄창 하나로\n지하 미궁을 탈출하라", 20, INK, width=440, max_lines=2)
+        label(surf, W // 2, 146, "마법 학교 졸업 시험", 17, INK_LIGHT, width=500, max_lines=1)
+        ui.title(surf, W // 2, 210, "Grid Hunt", 70, deco_font=True)
+        label(surf, W // 2, 268, "격 자 사 냥", 30, INK, width=500, max_lines=1)
+        pygame.draw.line(surf, INK_LIGHT, (W // 2 - 180, 298), (W // 2 + 180, 298), 2)
+        ui.gem(surf, (W // 2, 298), 6)
+        label(surf, W // 2, 346, "카드로 주문 순서를 짜고, 마법 탄창 하나로\n지하 미궁을 탈출하라", 19, INK, width=440, max_lines=2)
         self.start.draw(surf)
 
 
@@ -836,7 +837,7 @@ class PauseScene(Scene):
             dim = pygame.Surface((W, H), pygame.SRCALPHA)
             dim.fill((10, 5, 0, 200))
             surf.blit(dim, (0, 0))
-        ui.panel(surf, (W // 2 - 260, 190, 520, 310))
+        ui.scroll(surf, (W // 2 - 260, 190, 520, 310))
         label(surf, W // 2, 238, "일시정지", 36, INK, serif=True, width=460, max_lines=1)
         label(surf, W // 2, 290, "카드 끌어 놓기 · Enter 실행 · R 다시 시작 · ESC 계속", 15, INK_LIGHT, width=460, max_lines=2)
         self.resume.draw(surf)

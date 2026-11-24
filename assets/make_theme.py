@@ -105,13 +105,60 @@ def table():
     rgb[seam < 2] *= 0.35
     rgb[(seam >= 2) & (seam < 3)] *= 1.25
 
-    # 촛불 빛: 가운데 따뜻하게, 가장자리 어둡게
+    # 촛불 빛은 가운데만 따뜻하게, 가장자리는 보랏빛 마력 안개로 어둡게
     cx, cy = w * 0.5, h * 0.42
     r = np.sqrt(((x - cx) / w) ** 2 + ((y - cy) / h) ** 2)
-    light = np.clip(1.25 - r * 1.55, 0.28, 1.25)
+    light = np.clip(1.2 - r * 1.7, 0.22, 1.2)
     rgb = rgb * light[:, :, None]
-    rgb[:, :, 0] += 10 * (light > 1)
-    return to_surface(rgb)
+    fog = np.clip(r * 1.6 - 0.25, 0, 1) * (0.6 + 0.4 * fbm(h, w, base=3, octaves=3))
+    rgb[:, :, 0] += 26 * fog
+    rgb[:, :, 2] += 58 * fog
+    surf = to_surface(rgb)
+    magic_circle(surf, (w // 2, h // 2), 330)
+    return surf
+
+
+def rune(surf, center, size, seed, color):
+    """선으로 그린 룬 글자 하나 (세로 줄기 + 가지 몇 개). seed 마다 모양이 다름."""
+    rng = np.random.default_rng(seed)
+    cx, cy = center
+    h = size
+    pygame.draw.line(surf, color, (cx, cy - h / 2), (cx, cy + h / 2), 2)
+    for _ in range(int(rng.integers(1, 4))):
+        y0 = cy + rng.uniform(-h / 2, h / 4)
+        side = rng.choice([-1, 1])
+        y1 = y0 + rng.choice([-1, 1]) * h * 0.35
+        pygame.draw.line(surf, color, (cx, y0), (cx + side * h * 0.35, y1), 2)
+
+
+def magic_circle(surf, center, radius):
+    """탁자에 새겨진 마법진: 원 여러 개 + 팔각별(사각형 두 개) + 룬 고리 + 은은한 보랏빛."""
+    w, h = surf.get_size()
+    lines = pygame.Surface((w, h), pygame.SRCALPHA)
+    col = (180, 140, 250, 85)
+    cx, cy = center
+    for rr, width in ((radius, 3), (radius - 12, 1), (radius - 64, 2), (radius * 0.4, 2), (radius * 0.4 - 8, 1)):
+        pygame.draw.circle(lines, col, center, int(rr), width)
+    inner = radius - 64
+    for k in range(2):                                           # 팔각별: 45도 엇갈린 사각형 두 개
+        pts = [(cx + inner * math.cos(math.radians(k * 45 + i * 90)),
+                cy + inner * math.sin(math.radians(k * 45 + i * 90))) for i in range(4)]
+        pygame.draw.polygon(lines, col, pts, 2)
+    n = 28
+    for i in range(n):                                           # 바깥 고리의 룬
+        a = math.radians(i * 360 / n)
+        r = radius - 38
+        glyph = pygame.Surface((30, 30), pygame.SRCALPHA)
+        rune(glyph, (15, 15), 20, i, (205, 175, 255, 150))
+        glyph = pygame.transform.rotate(glyph, -math.degrees(a) - 90)
+        lines.blit(glyph, glyph.get_rect(center=(cx + r * math.cos(a), cy + r * math.sin(a))))
+    for i in range(8):                                           # 팔각별 꼭짓점의 작은 원
+        a = math.radians(i * 45)
+        pygame.draw.circle(lines, col, (cx + inner * math.cos(a), cy + inner * math.sin(a)), 9, 2)
+    glow = blur(lines, 5)
+    glow.set_alpha(150)
+    surf.blit(glow, (0, 0))
+    surf.blit(lines, (0, 0))
 
 
 # ======================================================================

@@ -17,7 +17,10 @@
 | `card_turn_left.png` / `card_turn_right.png` | 왼쪽 보기 / 오른쪽 보기 카드 | 237x330 |
 | `card_fire.png` / `card_reload.png` | 발사 / 재장전 카드 | 237x330 |
 
-### 전체 컨셉: 나무 탁자 위 양피지 보드게임 (중세풍)
+### 전체 컨셉: 마법진이 새겨진 나무 탁자 위 양피지 보드게임 (중세 마법풍)
+
+마법 느낌: 탁자 가장자리 보랏빛 마력 안개 + 룬 마법진(`make_theme.py` 의 `magic_circle`), 떠다니는 마력 불빛(`ui.sparkles`),
+번호는 룬 돌(`ui.seal`), 두루마리 대신 금장식 마법서 한 장(`ui.scroll`), 제목은 보랏빛으로 빛나는 금색 글자(`ui.title`).
 
 `python assets/make_theme.py` 로 만드는 그림 (numpy 필요, 게임 실행에는 필요 없음)
 | 파일 | 내용 |
