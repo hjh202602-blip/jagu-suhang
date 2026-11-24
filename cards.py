@@ -24,6 +24,17 @@ CARD_COUNTS = {
 CARD_TYPES = list(CARD_COUNTS)
 TURN_CARDS = ["왼쪽 보기", "오른쪽 보기"]
 
+# 카드에 적는 영어 이름 (중세 보드게임 느낌, Cinzel Decorative 글꼴로 씀)
+CARD_EN = {
+    "앞으로 이동": "Advance", "2칸 앞으로": "Dash", "왼쪽 보기": "Turn Left", "오른쪽 보기": "Turn Right",
+    "발사": "Fire", "뒤로 이동": "Retreat", "재장전": "Reload", "기절": "Stunned",
+}
+
+
+def card_en(name):
+    """카드 이름(한글) → 카드에 적는 영어 이름."""
+    return CARD_EN.get(name, name)
+
 
 class Deck:
     """카드 더미(draw_pile)와 버린 카드(discard), 두 개의 스택."""

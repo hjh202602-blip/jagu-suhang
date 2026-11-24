@@ -34,6 +34,27 @@ def font(size, serif=False, bold=True):
     return _fonts[key]
 
 
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
+
+
+def deco(size):
+    """카드 이름용 장식 글꼴 (Cinzel Decorative Bold, assets/fonts, SIL OFL). 영어만 씀."""
+    key = ("deco", size)
+    if key not in _fonts:
+        path = os.path.join(FONT_DIR, "CinzelDecorative-Bold.ttf")
+        _fonts[key] = pygame.font.Font(path, size) if os.path.isfile(path) else font(size, serif=True)
+    return _fonts[key]
+
+
+def deco_label(surf, x, y, text, size, color=INK, width=None):
+    """장식 글꼴 한 줄 (width 안에 들어가게 크기를 줄임)."""
+    if width:
+        while size > MIN_SIZE and deco(size).size(text)[0] > width:
+            size -= 1
+    img = deco(size).render(text, True, color)
+    surf.blit(img, img.get_rect(center=(x, y)))
+
+
 def _image(name):
     """assets/images 의 그림 (없으면 None)."""
     if name not in _images:

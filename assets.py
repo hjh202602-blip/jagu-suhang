@@ -18,7 +18,8 @@ import random
 import pygame
 
 from settings import WALL_COLOR, FLIP_COLOR, DIRS, BLACK, WHITE, MUSIC_VOLUME, SFX_VOLUME
-from ui import box, label, font, fit_size
+from ui import box, label, font, fit_size, deco_label
+from cards import card_en
 
 IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
 
@@ -167,14 +168,12 @@ def draw_player(surf, rect, facing):
 def draw_card(surf, rect, name):
     """카드 한 장 (손패). name: 카드 이름."""
     if _blit(surf, name, rect, keep_ratio=True):
-        # 카드 그림의 영어 이름 띠 위에 한글 이름을 덮어 씀 (띠 위치: 카드 높이의 84%~95%)
+        # 카드 그림의 이름 띠를 덮고 영어 이름을 장식 글꼴로 다시 씀 (띠 위치: 카드 높이의 84%~95%)
         w = int(rect.h * 79 / 110)
         strip = pygame.Rect(0, 0, int(w * 0.84), int(rect.h * 0.11))
         strip.center = (rect.centerx, rect.y + int(rect.h * 0.895))
         pygame.draw.rect(surf, (207, 182, 144), strip)
-        size = fit_size(name, 13, strip.w - 6)                      # 띠 안에 들어가게 줄임
-        img = font(size).render(name, True, (62, 40, 24))
-        surf.blit(img, img.get_rect(center=strip.center))
+        deco_label(surf, strip.centerx, strip.centery + 1, card_en(name), 13, (62, 40, 24), strip.w - 6)
     else:
         pygame.draw.rect(surf, WHITE, rect)
         box(surf, rect, 2)

@@ -137,5 +137,6 @@ LMMS 로 만든 효과음 5종, 종류마다 2가지 버전 (`assets/sounds/<이
 | 그래픽 (카드) | 표현 담당(디자이너) 직접 제작 카드 시트 `assets/images/card_sheet.png` → `assets/make_cards.py` 로 잘라 쓰고 없는 카드는 합성 | 자체 제작 |
 | 효과음 (버튼·카드·타격·피격·클리어) | 직접 제작 (LMMS 1.2.2, 프로젝트 `assets/sounds/lmms/*.mmp` → `assets/make_sfx.py`) | 자체 제작 |
 | 효과음 (발사·줍기·재장전·뒤집기·실패) | 직접 제작 (코드로 생성, `assets.py` 의 `SOUND_SHAPES`) | 자체 제작 |
+| 글꼴 (카드 이름) | Cinzel Decorative (Natanael Gama, Google Fonts) `assets/fonts/`, 라이선스 `assets/fonts/OFL.txt` | SIL Open Font License 1.1 |
 | 배경음악 | 직접 제작 (LMMS 1.2.2, 프로젝트 `assets/music/title.mmp`, `game.mmp` → `assets/make_bgm.py` 로 렌더링·반복 처리) | 자체 제작 |
 | 생성형 AI | Claude: 기본 틀 코드 작성 보조, BFS·조작 설명·별점·연산 표시 작성 보조 (개발 담당) | 활용 내역 기록 |

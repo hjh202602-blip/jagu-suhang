@@ -19,7 +19,7 @@ from settings import DIRS, HAND_SIZE, QUEUE_SIZE, N
 from structures import Queue
 from todo import NotDone
 from board import Board, EXIT, FLIP, FLOOR
-from cards import Deck, TURN_CARDS
+from cards import Deck, TURN_CARDS, card_en
 from magazine import Magazine
 from stages import STAGES
 
@@ -103,18 +103,27 @@ class Battle:
 
     def refill_ammo(self):
         """
-        탄이 하나도 없는데(탄창·바닥 모두) 적이 남아 있으면 더 이상 깰 수 없음.
+        남은 탄으로 적을 다 잡을 수 없으면 더 이상 깰 수 없음.
         → 플레이어가 갈 수 있는 가까운 빈 칸에 화염탄을 하나 만들어 줌.
+        '쓸 수 있는 탄' = 탄창 안의 탄 + 바닥에서 실제로 주울 수 있는 탄
+          (적 밑에 깔린 탄, 벽에 막혀 못 가는 곳의 탄은 빼고 셈)
         """
         board = self.board
-        if not board.enemies or not self.magazine.is_empty() or board.items:
+        if not board.enemies:
             return
+        p = board.player.pos
         blocked = {e.pos for e in board.enemies}
+        usable = [pos for pos in board.items
+                  if pos not in blocked and (pos == p or board.bfs_path(p, pos, blocked))]
+        have = sum(DAMAGE[x] for x in self.magazine.to_list()) + sum(DAMAGE[board.items[pos]] for pos in usable)
+        need = sum(e.hp for e in board.enemies)
+        if have >= need:
+            return
         near, far = [], []
         for r in range(N):
             for c in range(N):
                 pos = (c, r)
-                if board.tile(pos) != FLOOR or pos in blocked or pos == board.player.pos:
+                if board.tile(pos) != FLOOR or pos in blocked or pos == p or pos in board.items:
                     continue
                 path = board.bfs_path(board.player.pos, pos, blocked)
                 if path:
@@ -123,7 +132,7 @@ class Battle:
         if cands:
             pos = random.choice(cands)
             board.items[pos] = "화염탄"
-            self.message = "탄이 다 떨어져서 화염탄이 새로 나타났다"
+            self.message = "탄이 모자라서 화염탄이 새로 나타났다"
 
     def discard(self, cards):
         """
@@ -150,7 +159,7 @@ class Battle:
         card = self.hand[hand_index]
         if self.queue.enqueue(card):
             self.hand.pop(hand_index)
-            self.op("queue", f"enqueue({card})")
+            self.op("queue", f"enqueue({card_en(card)})")
 
     def unqueue_card(self, queue_index):
         """계획 중에는 큐에 넣은 카드를 손패로 되돌릴 수 있음."""
@@ -172,7 +181,7 @@ class Battle:
             return
         if not self.queue.is_empty():
             card = self.queue.dequeue()
-            self.op("queue", f"dequeue() → {card}")
+            self.op("queue", f"dequeue() → {card_en(card)}")
             self.do_action(card)
             self.discard([card])
             self.check_state()
@@ -230,10 +239,10 @@ class Battle:
             # 피격: 다음 행동(큐 맨 앞)을 버리고 맨 뒤에 '기절' 넣기
             lost = self.queue.dequeue()
             if lost is not None:
-                self.op("queue", f"dequeue() → {lost} 버림")
+                self.op("queue", f"dequeue() → {card_en(lost)} 버림")
                 self.discard([lost])
             self.queue.enqueue(STUN)
-            self.op("queue", f"enqueue({STUN})")
+            self.op("queue", f"enqueue({card_en(STUN)})")
             return False
 
         p.pos = nxt
